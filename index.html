@@ -109,7 +109,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans
 .chart-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;}
 .chart-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
 .chart-sub{font-size:11px;color:var(--text-dim);margin-top:2px;}
-canvas{max-height:280px;}
+canvas{max-height:450px;}
 
 .table-section{padding:0 40px 40px;}
 .table-card{
@@ -452,7 +452,7 @@ function renderParks(events) {
       plugins:{ legend:{ labels:{color:'#8189a3',font:{family:'DM Sans',size:11}} } },
       scales:{
         x:{ stacked:true, grid:{color:'rgba(31,34,48,0.5)'}, ticks:{color:'#8189a3',font:{family:'JetBrains Mono',size:10}} },
-        y:{ stacked:true, grid:{display:false}, ticks:{color:'#e4e8f1',font:{family:'DM Sans',size:11}}, afterFit: function(axis){ axis.width = 220; } }
+        y:{ stacked:true, grid:{display:false}, ticks:{color:'#e4e8f1',font:{family:'DM Sans',size:10}, autoSkip:false, maxRotation:0} }
       }
     }
   });
