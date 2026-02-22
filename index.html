@@ -452,7 +452,7 @@ function renderParks(events) {
       plugins:{ legend:{ labels:{color:'#8189a3',font:{family:'DM Sans',size:11}} } },
       scales:{
         x:{ stacked:true, grid:{color:'rgba(31,34,48,0.5)'}, ticks:{color:'#8189a3',font:{family:'JetBrains Mono',size:10}} },
-        y:{ stacked:true, grid:{display:false}, ticks:{color:'#e4e8f1',font:{family:'DM Sans',size:11}} }
+        y:{ stacked:true, grid:{display:false}, ticks:{color:'#e4e8f1',font:{family:'DM Sans',size:11}}, afterFit: function(axis){ axis.width = 220; } }
       }
     }
   });
