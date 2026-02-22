@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSU Loiret — Afficheur</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #06070b;
+  --card: #0e1018;
+  --border: #1a1d2a;
+  --text: #e4e8f1;
+  --dim: #6b7394;
+  --accent: #4a7cff;
+  --alarm: #f0453a;
+  --alarm-bg: rgba(240,69,58,0.12);
+  --warning: #f5a623;
+  --warning-bg: rgba(245,166,35,0.12);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{
+  height:100vh;width:100vw;overflow:hidden;
+  background:var(--bg);color:var(--text);
+  font-family:'DM Sans',system-ui,sans-serif;
+}
+
+.dashboard{
+  height:100vh;width:100vw;
+  display:grid;
+  grid-template-rows:auto 1fr;
+  grid-template-columns:1fr;
+  gap:0;
+  padding:12px 16px 10px;
+}
+
+/* ═══ HEADER BAR ═══ */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 4px 10px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:10px;
+}
+.topbar-left h1{
+  font-size:clamp(16px,2vw,22px);font-weight:900;color:#fff;
+  letter-spacing:0.3px;line-height:1;
+}
+.topbar-left p{
+  font-size:clamp(9px,1vw,11px);color:var(--dim);margin-top:2px;font-weight:500;
+}
+.topbar-right{display:flex;align-items:center;gap:clamp(6px,1.2vw,14px);}
+.stat-box{
+  background:rgba(255,255,255,0.03);border:1px solid var(--border);
+  border-radius:8px;padding:6px 14px;text-align:center;min-width:70px;
+}
+.stat-box .v{font-size:clamp(16px,2.2vw,26px);font-weight:900;line-height:1;}
+.stat-box .l{font-size:clamp(7px,0.7vw,9px);color:var(--dim);text-transform:uppercase;letter-spacing:0.7px;margin-top:2px;}
+.maj{font-size:clamp(8px,0.8vw,10px);color:var(--dim);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+
+/* ═══ CHARTS GRID ═══ */
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr;
+  gap:10px;
+  min-height:0;
+}
+.panel{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:12px 14px 8px;
+  display:flex;flex-direction:column;
+  min-height:0;overflow:hidden;
+}
+.panel-title{
+  font-size:clamp(9px,0.9vw,11px);font-weight:700;
+  text-transform:uppercase;letter-spacing:0.5px;color:var(--dim);
+  margin-bottom:6px;flex-shrink:0;
+}
+.panel canvas{flex:1;min-height:0;}
+
+/* Timeline prend toute la largeur en bas */
+.panel-timeline{grid-column:1/-1;}
+
+.no-data{
+  display:flex;align-items:center;justify-content:center;
+  height:100vh;color:var(--dim);font-size:18px;
+}
+</style>
+</head>
+<body>
+
+<div class="dashboard">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>SSU Loiret</h1>
+      <p>Alarm & Warning Dashboard — 30 jours glissants</p>
+    </div>
+    <div class="topbar-right">
+      <div class="stat-box"><div class="v" id="s-total" style="color:var(--accent)">—</div><div class="l">Événements</div></div>
+      <div class="stat-box"><div class="v" id="s-alarm" style="color:var(--alarm)">—</div><div class="l">Alarmes</div></div>
+      <div class="stat-box"><div class="v" id="s-warn" style="color:var(--warning)">—</div><div class="l">Warnings</div></div>
+      <div class="maj" id="s-maj">—</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-title">Répartition par parc</div>
+      <canvas id="parksChart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Top récurrences</div>
+      <canvas id="topChart"></canvas>
+    </div>
+    <div class="panel panel-timeline">
+      <div class="panel-title">Évolution journalière</div>
+      <canvas id="timeChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="no-data" id="no-data" style="display:none;">Aucune donnée — lancez la macro Excel.</div>
+
+<script>
+const OMITTED_CODES = new Set(["213","309","900","276"]);
+const DAYS = 30;
+
+let parksChart, topChart, timeChart;
+
+async function init() {
+  let data;
+  try {
+    const r = await fetch('history.json?t='+Date.now());
+    if (!r.ok) throw 0;
+    data = await r.json();
+  } catch(e) {
+    document.querySelector('.dashboard').style.display='none';
+    document.getElementById('no-data').style.display='flex';
+    return;
+  }
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate()-DAYS);
+  const cutStr = cutoff.toISOString().slice(0,10);
+
+  let events = [];
+  data.filter(d=>d.date>=cutStr).forEach(day=>{
+    day.events.forEach(ev=>{
+      if(OMITTED_CODES.has(String(ev.code))) return;
+      events.push({...ev, date:day.date});
+    });
+  });
+
+  // Stats
+  const total = events.reduce((s,e)=>s+e.count,0);
+  const alarms = events.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0);
+  const warnings = events.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0);
+  const lastDate = data[data.length-1]?.date||'—';
+
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-alarm').textContent = alarms;
+  document.getElementById('s-warn').textContent = warnings;
+  document.getElementById('s-maj').textContent = 'MAJ : '+lastDate;
+
+  // Chart defaults
+  Chart.defaults.font.family = "'DM Sans',sans-serif";
+  Chart.defaults.color = '#6b7394';
+
+  drawParks(events);
+  drawTop(events);
+  drawTimeline(events);
+}
+
+function drawParks(events) {
+  const byPark={};
+  events.forEach(e=>{
+    if(!byPark[e.park]) byPark[e.park]={a:0,w:0};
+    if(e.severity==='Alarm') byPark[e.park].a+=e.count; else byPark[e.park].w+=e.count;
+  });
+  const sorted=Object.entries(byPark).sort((a,b)=>(b[1].a+b[1].w)-(a[1].a+a[1].w));
+
+  parksChart = new Chart(document.getElementById('parksChart'),{
+    type:'bar',
+    data:{
+      labels:sorted.map(s=>s[0]),
+      datasets:[
+        {label:'Alarmes',data:sorted.map(s=>s[1].a),backgroundColor:'rgba(240,69,58,0.75)',borderRadius:3,borderSkipped:false},
+        {label:'Warnings',data:sorted.map(s=>s[1].w),backgroundColor:'rgba(245,166,35,0.65)',borderRadius:3,borderSkipped:false}
+      ]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{stacked:true,grid:{color:'rgba(26,29,42,0.8)'},ticks:{font:{family:'JetBrains Mono',size:9}}},
+        y:{stacked:true,grid:{display:false},ticks:{font:{size:10},autoSkip:false,maxRotation:0}}
+      }
+    }
+  });
+}
+
+function drawTop(events) {
+  const byCode={};
+  events.forEach(e=>{
+    const k=e.code+' — '+e.event;
+    if(!byCode[k]) byCode[k]={c:0,s:e.severity};
+    byCode[k].c+=e.count;
+  });
+  const sorted=Object.entries(byCode).sort((a,b)=>b[1].c-a[1].c).slice(0,12);
+
+  topChart = new Chart(document.getElementById('topChart'),{
+    type:'bar',
+    data:{
+      labels:sorted.map(s=>s[0].length>35?s[0].slice(0,35)+'…':s[0]),
+      datasets:[{
+        data:sorted.map(s=>s[1].c),
+        backgroundColor:sorted.map(s=>s[1].s==='Alarm'?'rgba(240,69,58,0.75)':'rgba(245,166,35,0.65)'),
+        borderRadius:3,borderSkipped:false
+      }]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{grid:{color:'rgba(26,29,42,0.8)'},ticks:{font:{family:'JetBrains Mono',size:9}}},
+        y:{grid:{display:false},ticks:{font:{size:10},autoSkip:false,maxRotation:0}}
+      }
+    }
+  });
+}
+
+function drawTimeline(events) {
+  const byDate={};
+  events.forEach(e=>{
+    if(!byDate[e.date]) byDate[e.date]={a:0,w:0};
+    if(e.severity==='Alarm') byDate[e.date].a+=e.count; else byDate[e.date].w+=e.count;
+  });
+  const dates=Object.keys(byDate).sort();
+  const labels=dates.map(d=>{const p=d.split('-');return p[2]+'/'+p[1];});
+
+  timeChart = new Chart(document.getElementById('timeChart'),{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Alarmes',data:dates.map(d=>byDate[d].a),backgroundColor:'rgba(240,69,58,0.7)',borderRadius:3,borderSkipped:false},
+        {label:'Warnings',data:dates.map(d=>byDate[d].w),backgroundColor:'rgba(245,166,35,0.6)',borderRadius:3,borderSkipped:false}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:8}}},
+      scales:{
+        x:{stacked:true,grid:{color:'rgba(26,29,42,0.5)'},ticks:{font:{family:'JetBrains Mono',size:9},maxRotation:0}},
+        y:{stacked:true,grid:{color:'rgba(26,29,42,0.5)'},ticks:{font:{family:'JetBrains Mono',size:9}}}
+      }
+    }
+  });
+}
+
+// Auto-refresh toutes les 5 minutes
+init();
+setInterval(()=>{ location.reload(); }, 5*60*1000);
+</script>
+</body>
+</html>
