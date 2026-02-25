@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSU Loiret — Wind Park Monitoring</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #08090d;
+  --surface: #111318;
+  --card: #161920;
+  --border: #1f2230;
+  --border-hover: #2d3148;
+  --text: #e4e8f1;
+  --text-dim: #8189a3;
+  --accent: #4a7cff;
+  --accent-glow: rgba(74,124,255,0.15);
+  --alarm: #f0453a;
+  --alarm-bg: rgba(240,69,58,0.08);
+  --warning: #f5a623;
+  --warning-bg: rgba(245,166,35,0.08);
+  --green: #2dd4a0;
+  --green-bg: rgba(45,212,160,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;overflow-x:hidden;}
+::selection{background:var(--accent);color:#fff;}
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border-hover);border-radius:3px;}
+
+.header{
+  background:linear-gradient(135deg,#0d1020 0%,#131832 50%,#0d1020 100%);
+  border-bottom:1px solid var(--border);
+  padding:28px 40px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:relative;overflow:hidden;
+}
+.header::before{
+  content:'';position:absolute;top:-50%;right:-10%;width:500px;height:500px;
+  background:radial-gradient(circle,rgba(74,124,255,0.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.header-left{display:flex;align-items:center;gap:20px;z-index:1;}
+.header-title h1{font-size:26px;font-weight:900;color:#fff;letter-spacing:0.5px;line-height:1.1;}
+.header-title p{font-size:13px;color:var(--text-dim);margin-top:3px;font-weight:500;}
+.header-right{display:flex;align-items:center;gap:12px;z-index:1;}
+.header-stat{
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);
+  border-radius:10px;padding:10px 18px;text-align:center;min-width:90px;
+}
+.header-stat .val{font-size:22px;font-weight:900;line-height:1;}
+.header-stat .lbl{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;margin-top:3px;}
+.last-update{font-size:11px;color:var(--text-dim);text-align:right;margin-top:2px;font-family:'JetBrains Mono',monospace;}
+
+.controls{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+  padding:20px 40px;border-bottom:1px solid var(--border);
+}
+.filter-group{display:flex;gap:6px;align-items:center;}
+.filter-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;margin-right:8px;font-weight:600;}
+.filter-btn{
+  background:var(--card);border:1px solid var(--border);color:var(--text-dim);
+  padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;
+  font-family:'DM Sans',sans-serif;transition:all 0.2s;
+}
+.filter-btn:hover{border-color:var(--border-hover);color:var(--text);}
+.filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 12px rgba(74,124,255,0.3);}
+.severity-btn.alarm.active{background:var(--alarm);border-color:var(--alarm);box-shadow:0 2px 12px rgba(240,69,58,0.3);}
+.severity-btn.warning.active{background:var(--warning);border-color:var(--warning);color:#1a1a1a;box-shadow:0 2px 12px rgba(245,166,35,0.3);}
+
+.kpis{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+  padding:20px 40px;
+}
+.kpi{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:20px 22px;position:relative;overflow:hidden;transition:border-color 0.2s;
+}
+.kpi:hover{border-color:var(--border-hover);}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0;}
+.kpi.total::after{background:var(--accent);}
+.kpi.alarm::after{background:var(--alarm);}
+.kpi.warning::after{background:var(--warning);}
+.kpi.parks::after{background:var(--green);}
+.kpi-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;font-weight:600;}
+.kpi-value{font-size:36px;font-weight:900;line-height:1;margin-top:8px;}
+.kpi.total .kpi-value{color:var(--accent);}
+.kpi.alarm .kpi-value{color:var(--alarm);}
+.kpi.warning .kpi-value{color:var(--warning);}
+.kpi.parks .kpi-value{color:var(--green);}
+.kpi-trend{font-size:11px;margin-top:6px;font-weight:600;font-family:'JetBrains Mono',monospace;}
+.trend-up{color:var(--alarm);}
+.trend-down{color:var(--green);}
+.trend-flat{color:var(--text-dim);}
+
+.charts{
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+  padding:0 40px 14px;
+}
+.chart-full{grid-column:1/-1;}
+.chart-card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:22px;transition:border-color 0.2s;
+}
+.chart-card:hover{border-color:var(--border-hover);}
+.chart-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;}
+.chart-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
+.chart-sub{font-size:11px;color:var(--text-dim);margin-top:2px;}
+canvas{max-height:450px;}
+
+.table-section{padding:0 40px 40px;}
+.table-card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;
+}
+.table-header{
+  padding:18px 22px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.table-header h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
+.table-count{font-size:12px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;}
+table{width:100%;border-collapse:collapse;}
+th{
+  background:rgba(0,0,0,0.3);padding:10px 18px;text-align:left;
+  font-size:10px;font-weight:700;color:var(--text-dim);
+  text-transform:uppercase;letter-spacing:0.8px;
+}
+td{padding:11px 18px;font-size:13px;border-bottom:1px solid var(--border);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(74,124,255,0.03);}
+.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.tag-alarm{background:var(--alarm-bg);color:var(--alarm);}
+.tag-warning{background:var(--warning-bg);color:var(--warning);}
+.code-tag{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  background:rgba(74,124,255,0.08);color:var(--accent);
+  padding:3px 8px;border-radius:6px;font-weight:600;
+}
+.bar-cell{display:flex;align-items:center;gap:10px;}
+.bar-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;transition:width 0.5s ease;}
+.bar-fill.alarm{background:var(--alarm);}
+.bar-fill.warning{background:var(--warning);}
+.bar-count{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;min-width:30px;text-align:right;}
+
+.footer{
+  text-align:center;padding:20px;font-size:11px;color:var(--text-dim);
+  border-top:1px solid var(--border);
+}
+.no-data{text-align:center;padding:80px 40px;color:var(--text-dim);}
+.no-data h2{font-size:20px;margin-bottom:8px;color:var(--text);}
+
+@media(max-width:1024px){
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .charts{grid-template-columns:1fr;}
+  .header,.controls,.kpis,.charts,.table-section{padding-left:20px;padding-right:20px;}
+}
+@media(max-width:600px){
+  .kpis{grid-template-columns:1fr;}
+  .header{flex-direction:column;gap:16px;text-align:center;}
+  .header-right{flex-wrap:wrap;justify-content:center;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-title">
+      <h1>SSU Loiret</h1>
+      <p>Alarm & Warning Dashboard</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-stat"><div class="val" id="hdr-total" style="color:var(--accent)">—</div><div class="lbl">Événements</div></div>
+    <div class="header-stat"><div class="val" id="hdr-alarms" style="color:var(--alarm)">—</div><div class="lbl">Alarmes</div></div>
+    <div class="header-stat"><div class="val" id="hdr-warnings" style="color:var(--warning)">—</div><div class="lbl">Warnings</div></div>
+    <div>
+      <div class="last-update" id="last-update">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="filter-group">
+    <span class="filter-label">Période</span>
+    <button class="filter-btn active" onclick="setPeriod('7d',this)">7 jours</button>
+    <button class="filter-btn" onclick="setPeriod('1m',this)">1 mois</button>
+    <button class="filter-btn" onclick="setPeriod('3m',this)">3 mois</button>
+    <button class="filter-btn" onclick="setPeriod('6m',this)">6 mois</button>
+    <button class="filter-btn" onclick="setPeriod('1y',this)">1 an</button>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">Sévérité</span>
+    <button class="filter-btn severity-btn active" onclick="setSeverity('all',this)">Tous</button>
+    <button class="filter-btn severity-btn alarm" onclick="setSeverity('Alarm',this)">Alarmes</button>
+    <button class="filter-btn severity-btn warning" onclick="setSeverity('Warning',this)">Warnings</button>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi total"><div class="kpi-label">Total événements</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-trend" id="trend-total"></div></div>
+  <div class="kpi alarm"><div class="kpi-label">Alarmes</div><div class="kpi-value" id="kpi-alarms">—</div><div class="kpi-trend" id="trend-alarms"></div></div>
+  <div class="kpi warning"><div class="kpi-label">Warnings</div><div class="kpi-value" id="kpi-warnings">—</div><div class="kpi-trend" id="trend-warnings"></div></div>
+  <div class="kpi parks"><div class="kpi-label">Parcs concernés</div><div class="kpi-value" id="kpi-parks">—</div><div class="kpi-trend" id="trend-parks"></div></div>
+</div>
+
+<div class="charts">
+  <div class="chart-card chart-full">
+    <div class="chart-header">
+      <div><div class="chart-title">Évolution journalière</div><div class="chart-sub">Nombre d'événements par jour sur la période</div></div>
+    </div>
+    <canvas id="timelineChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-header">
+      <div><div class="chart-title">Top récurrences</div><div class="chart-sub">Codes d'alarme les plus fréquents</div></div>
+    </div>
+    <canvas id="topEventsChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-header">
+      <div><div class="chart-title">Répartition par parc</div><div class="chart-sub">Nombre d'événements par wind park</div></div>
+    </div>
+    <canvas id="parksChart"></canvas>
+  </div>
+</div>
+
+<div class="table-section">
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Détail des événements</h3>
+      <span class="table-count" id="table-count">—</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Sévérité</th>
+            <th>Code</th>
+            <th>Événement</th>
+            <th>Parc</th>
+            <th>Occurrences</th>
+            <th>Dernière vue</th>
+            <th>Turbines</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  SSU Loiret — Données SCEMEA Daily Report FR
+</div>
+
+<div class="no-data" id="no-data" style="display:none;">
+  <h2>Aucune donnée disponible</h2>
+  <p>Lancez la macro Excel pour alimenter le dashboard.</p>
+</div>
+
+<script>
+const OMITTED_CODES = [
+  "213",   // NoiseReductionPauseModeActive
+  "309",   // Pause over RCS
+  "900",   // Pause pressed on keyboard
+  "276",   // Start auto-outyawing CCW
+  "3298",
+  "3273",
+];
+
+let HISTORY = [];
+let currentPeriod = '7d';
+let currentSeverity = 'all';
+let timelineChart, topEventsChart, parksChart;
+
+const PERIOD_DAYS = {'7d':7,'1m':30,'3m':90,'6m':180,'1y':365};
+
+async function loadData() {
+  try {
+    const resp = await fetch('history.json?t=' + Date.now());
+    if (!resp.ok) throw new Error('No data file');
+    HISTORY = await resp.json();
+    render();
+  } catch(e) {
+    document.getElementById('no-data').style.display = 'block';
+    document.querySelector('.kpis').style.display = 'none';
+    document.querySelector('.charts').style.display = 'none';
+    document.querySelector('.table-section').style.display = 'none';
+  }
+}
+
+function getFilteredData() {
+  const now = new Date();
+  const days = PERIOD_DAYS[currentPeriod];
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = cutoff.toISOString().slice(0,10);
+  const omitSet = new Set(OMITTED_CODES);
+
+  let events = [];
+  HISTORY.filter(day => day.date >= cutoffStr).forEach(day => {
+    day.events.forEach(ev => {
+      if (omitSet.has(String(ev.code))) return;
+      if (currentSeverity !== 'all' && ev.severity !== currentSeverity) return;
+      events.push({...ev, date: day.date});
+    });
+  });
+  return events;
+}
+
+function render() {
+  if (!HISTORY.length) return;
+  const events = getFilteredData();
+  const omitSet = new Set(OMITTED_CODES);
+  const days = PERIOD_DAYS[currentPeriod];
+
+  const totalCount = events.reduce((s,e) => s+e.count, 0);
+  const alarmCount = events.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0);
+  const warningCount = events.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0);
+  const parkSet = new Set(events.map(e=>e.park));
+
+  document.getElementById('kpi-total').textContent = totalCount;
+  document.getElementById('kpi-alarms').textContent = alarmCount;
+  document.getElementById('kpi-warnings').textContent = warningCount;
+  document.getElementById('kpi-parks').textContent = parkSet.size;
+  document.getElementById('hdr-total').textContent = totalCount;
+  document.getElementById('hdr-alarms').textContent = alarmCount;
+  document.getElementById('hdr-warnings').textContent = warningCount;
+
+  // Tendances
+  const now = new Date();
+  const prevStart = new Date(now);
+  prevStart.setDate(prevStart.getDate() - days*2);
+  const prevEnd = new Date(now);
+  prevEnd.setDate(prevEnd.getDate() - days);
+  const prevStartStr = prevStart.toISOString().slice(0,10);
+  const prevEndStr = prevEnd.toISOString().slice(0,10);
+
+  let prevEvents = [];
+  HISTORY.filter(day => day.date >= prevStartStr && day.date < prevEndStr).forEach(day => {
+    day.events.forEach(ev => {
+      if (omitSet.has(String(ev.code))) return;
+      if (currentSeverity !== 'all' && ev.severity !== currentSeverity) return;
+      prevEvents.push(ev);
+    });
+  });
+
+  setTrend('trend-total', totalCount, prevEvents.reduce((s,e)=>s+e.count,0));
+  setTrend('trend-alarms', alarmCount, prevEvents.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0));
+  setTrend('trend-warnings', warningCount, prevEvents.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0));
+
+  const lastDate = HISTORY[HISTORY.length - 1]?.date || '—';
+  document.getElementById('last-update').textContent = 'MAJ : ' + lastDate;
+
+  renderTimeline(events);
+  renderTopEvents(events);
+  renderParks(events);
+  renderTable(events);
+}
+
+function setTrend(id, current, previous) {
+  const el = document.getElementById(id);
+  if (!previous) { el.textContent = ''; return; }
+  const diff = current - previous;
+  const pct = previous > 0 ? Math.round((diff/previous)*100) : 0;
+  if (diff > 0) { el.className = 'kpi-trend trend-up'; el.textContent = '▲ +'+pct+'% vs période préc.'; }
+  else if (diff < 0) { el.className = 'kpi-trend trend-down'; el.textContent = '▼ '+pct+'% vs période préc.'; }
+  else { el.className = 'kpi-trend trend-flat'; el.textContent = '→ stable'; }
+}
+
+function renderTimeline(events) {
+  const byDate = {};
+  events.forEach(e => {
+    if (!byDate[e.date]) byDate[e.date] = {alarm:0, warning:0};
+    if (e.severity === 'Alarm') byDate[e.date].alarm += e.count;
+    else byDate[e.date].warning += e.count;
+  });
+  const dates = Object.keys(byDate).sort();
+  const labels = dates.map(d => { const [y,m,dd] = d.split('-'); return dd+'/'+m; });
+
+  if (timelineChart) timelineChart.destroy();
+  timelineChart = new Chart(document.getElementById('timelineChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Alarmes', data:dates.map(d=>byDate[d].alarm), backgroundColor:'rgba(240,69,58,0.7)', borderRadius:4, borderSkipped:false },
+        { label:'Warnings', data:dates.map(d=>byDate[d].warning), backgroundColor:'rgba(245,166,35,0.6)', borderRadius:4, borderSkipped:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#8189a3', font:{family:'DM Sans',size:11} } } },
+      scales:{
+        x:{ stacked:true, grid:{color:'rgba(31,34,48,0.5)'}, ticks:{color:'#8189a3',font:{family:'JetBrains Mono',size:10}} },
+        y:{ stacked:true, grid:{color:'rgba(31,34,48,0.5)'}, ticks:{color:'#8189a3',font:{family:'JetBrains Mono',size:10}} }
+      }
+    }
+  });
+}
+
+function renderTopEvents(events) {
+  const byCode = {};
+  const detail = {};
+  events.forEach(e => {
+    const key = e.code + ' — ' + e.event;
+    if (!byCode[key]) byCode[key] = {count:0, severity:e.severity};
+    byCode[key].count += e.count;
+    if (!detail[key]) detail[key] = {};
+    if (!detail[key][e.park]) detail[key][e.park] = {count:0, turbines:new Set()};
+    detail[key][e.park].count += e.count;
+    if (e.turbines) e.turbines.split(', ').forEach(t => detail[key][e.park].turbines.add(t));
+  });
+  const sorted = Object.entries(byCode).sort((a,b) => b[1].count - a[1].count).slice(0,10);
+  const keys = sorted.map(s => s[0]);
+
+  if (topEventsChart) topEventsChart.destroy();
+  topEventsChart = new Chart(document.getElementById('topEventsChart'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(s => s[0].length > 40 ? s[0].slice(0,40)+'…' : s[0]),
+      datasets: [{ data: sorted.map(s=>s[1].count), backgroundColor: sorted.map(s=>s[1].severity==='Alarm'?'rgba(240,69,58,0.75)':'rgba(245,166,35,0.65)'), borderRadius:4, borderSkipped:false }]
+    },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{
+        backgroundColor:'rgba(14,16,24,0.95)', borderColor:'rgba(74,124,255,0.3)', borderWidth:1,
+        titleFont:{family:'DM Sans',size:12,weight:'bold'}, bodyFont:{family:'JetBrains Mono',size:11}, padding:12,
+        callbacks:{
+          title: function(items){ return keys[items[0].dataIndex]; },
+          label: function(item){ return 'Total : ' + item.raw; },
+          afterBody: function(items){
+            const d = detail[keys[items[0].dataIndex]];
+            if (!d) return [];
+            const lines = [''];
+            Object.entries(d).sort((a,b)=>b[1].count-a[1].count).forEach(([park,v])=>{
+              lines.push(park + ' : ' + v.count);
+              const t = [...v.turbines].sort().join(', ');
+              if (t) lines.push('  → ' + t);
+            });
+            return lines;
+          }
+        }
+      }},
+      scales:{
+        x:{ grid:{color:'rgba(31,34,48,0.5)'}, ticks:{color:'#8189a3',font:{family:'JetBrains Mono',size:10}} },
+        y:{ grid:{display:false}, ticks:{color:'#e4e8f1',font:{family:'DM Sans',size:11}} }
+      }
+    }
+  });
+}
+
+function renderParks(events) {
+  const byPark = {};
+  const detail = {};
+  events.forEach(e => {
+    if (!byPark[e.park]) byPark[e.park] = {alarm:0,warning:0};
+    if (e.severity === 'Alarm') byPark[e.park].alarm += e.count;
+    else byPark[e.park].warning += e.count;
+    if (!detail[e.park]) detail[e.park] = {};
+    const ek = e.code + ' — ' + e.event;
+    if (!detail[e.park][ek]) detail[e.park][ek] = {count:0, turbines:new Set()};
+    detail[e.park][ek].count += e.count;
+    if (e.turbines) e.turbines.split(', ').forEach(t => detail[e.park][ek].turbines.add(t));
+  });
+  const sorted = Object.entries(byPark).sort((a,b) => (b[1].alarm+b[1].warning) - (a[1].alarm+a[1].warning));
+  const names = sorted.map(s=>s[0]);
+
+  if (parksChart) parksChart.destroy();
+  parksChart = new Chart(document.getElementById('parksChart'), {
+    type: 'bar',
+    data: {
+      labels: names,
+      datasets: [
+        { label:'Alarmes', data:sorted.map(s=>s[1].alarm), backgroundColor:'rgba(240,69,58,0.7)', borderRadius:4, borderSkipped:false },
+        { label:'Warnings', data:sorted.map(s=>s[1].warning), backgroundColor:'rgba(245,166,35,0.6)', borderRadius:4, borderSkipped:false }
+      ]
+    },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{color:'#8189a3',font:{family:'DM Sans',size:11}} }, tooltip:{
+        backgroundColor:'rgba(14,16,24,0.95)', borderColor:'rgba(74,124,255,0.3)', borderWidth:1,
+        titleFont:{family:'DM Sans',size:12,weight:'bold'}, bodyFont:{family:'JetBrains Mono',size:11}, padding:12,
+        callbacks:{
+          title: function(items){ return names[items[0].dataIndex]; },
+          afterBody: function(items){
+            const d = detail[names[items[0].dataIndex]];
+            if (!d) return [];
+            const lines = [''];
+            const entries = Object.entries(d).sort((a,b)=>b[1].count-a[1].count);
+            entries.slice(0,8).forEach(([ev,v])=>{
+              lines.push(ev + ' : ' + v.count);
+              const t = [...v.turbines].sort().join(', ');
+              if (t) lines.push('  → ' + t);
+            });
+            if (entries.length > 8) lines.push('... +' + (entries.length-8) + ' autres');
+            return lines;
+          }
+        }
+      }},
+      scales:{
+        x:{ stacked:true, grid:{color:'rgba(31,34,48,0.5)'}, ticks:{color:'#8189a3',font:{family:'JetBrains Mono',size:10}} },
+        y:{ stacked:true, grid:{display:false}, ticks:{color:'#e4e8f1',font:{family:'DM Sans',size:10}, autoSkip:false, maxRotation:0} }
+      }
+    }
+  });
+}
+
+function renderTable(events) {
+  const agg = {};
+  events.forEach(e => {
+    const key = e.code+'|'+e.event+'|'+e.park;
+    if (!agg[key]) agg[key] = {...e, totalCount:0, lastDate:'', turbineSet:new Set()};
+    agg[key].totalCount += e.count;
+    if (e.date > agg[key].lastDate) { agg[key].lastDate = e.date; agg[key].lastSeen = e.lastSeen || e.date; }
+    if (e.turbines) e.turbines.split(', ').forEach(t => agg[key].turbineSet.add(t));
+  });
+  const rows = Object.values(agg).sort((a,b) => b.totalCount - a.totalCount);
+  const maxCount = rows.length ? rows[0].totalCount : 1;
+  document.getElementById('table-count').textContent = rows.length + ' événements';
+  document.getElementById('table-body').innerHTML = rows.map(r => {
+    const isAlarm = r.severity === 'Alarm';
+    const pct = Math.round((r.totalCount/maxCount)*100);
+    const turbines = [...r.turbineSet].sort().join(', ');
+    return '<tr><td><span class="tag '+(isAlarm?'tag-alarm':'tag-warning')+'">'+r.severity+'</span></td><td><span class="code-tag">'+r.code+'</span></td><td>'+r.event+'</td><td>'+r.park+'</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill '+(isAlarm?'alarm':'warning')+'" style="width:'+pct+'%"></div></div><span class="bar-count">'+r.totalCount+'</span></div></td><td style="font-family:JetBrains Mono,monospace;font-size:12px;color:var(--text-dim)">'+(r.lastSeen||r.lastDate)+'</td><td style="font-size:12px;color:var(--text-dim)">'+(turbines||'—')+'</td></tr>';
+  }).join('');
+}
+
+function setPeriod(p, el) {
+  currentPeriod = p;
+  document.querySelectorAll('.controls .filter-group:first-child .filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+function setSeverity(s, el) {
+  currentSeverity = s;
+  document.querySelectorAll('.severity-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+loadData();
+</script>
+</body>
+</html>
