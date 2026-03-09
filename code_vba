@@ -1,5 +1,5 @@
 ' â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-' MODULE : LUHUT_Dashboard_Updater
+' MODULE : SCEMEA_Dashboard_Updater (Tous Supervisors, Multi-Mail)
 ' â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 ' A coller dans un Module VBA d'un fichier .xlsm
 '
@@ -9,15 +9,19 @@
 '   - Microsoft Scripting Runtime
 '   - Microsoft XML, v6.0 (ou v3.0)
 '
+' CONFIGURATION :
+'   Les codes a exclure sont lus depuis la feuille "Config"
+'   du fichier .xlsm, colonne A ("Codes Omis") a partir de A2
+'
+' PRINCIPE :
+'   1. Cherche TOUS les mails SCEMEA non lus dans Outlook
+'   2. Extrait les donnees de chaque piece jointe Excel
+'   3. Fusionne avec l'historique GitHub
+'   4. Pousse le history.json mis a jour
+'   5. Marque les mails traites comme lus
+'
 ' UTILISATION :
 '   Lancer la macro "UpdateDashboard" (bouton ou Alt+F8)
-'   Elle fait tout automatiquement :
-'   1. Cherche le dernier mail SCEMEA dans Outlook
-'   2. Sauvegarde la piece jointe Excel dans %TEMP%
-'   3. Lit et filtre les donnees LUHUT
-'   4. Recupere history.json depuis GitHub
-'   5. Fusionne ancien + nouveau
-'   6. Pousse le nouveau history.json vers GitHub
 ' â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 Option Explicit
@@ -28,12 +32,75 @@ Private Const GITHUB_USER As String = "Katoche690"
 Private Const GITHUB_REPO As String = "SCEMEA"
 Private Const GITHUB_BRANCH As String = "main"
 Private Const HISTORY_FILE As String = "history.json"
-Private Const SUPERVISOR As String = "LUHUT"
 Private Const MAIL_SUBJECT As String = "SCEMEA #Daily Report-FR"
 Private Const MAIL_SENDER As String = "scemea@vestas.com"
 
-' Codes a exclure du monitoring
-Private Const OMITTED_CODES As String = "213,309,900,276,3298,3273"
+' Nom de la feuille de config dans le .xlsm
+Private Const CONFIG_SHEET As String = "Config"
+
+
+' ============ LIRE LES CODES OMIS DEPUIS LA FEUILLE CONFIG ============
+Private Function GetOmittedCodes() As String()
+    Dim result() As String
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim count As Long
+    
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(CONFIG_SHEET)
+    On Error GoTo 0
+    
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.count))
+        ws.Name = CONFIG_SHEET
+        ws.Cells(1, 1).Value = "Codes Omis"
+        ws.Cells(1, 1).Font.Bold = True
+        ws.Cells(1, 1).Interior.Color = RGB(70, 130, 180)
+        ws.Cells(1, 1).Font.Color = RGB(255, 255, 255)
+        ws.Columns(1).ColumnWidth = 15
+        ws.Cells(2, 1).Value = 900
+        ws.Cells(3, 1).Value = 213
+        ws.Cells(4, 1).Value = 309
+        ws.Cells(5, 1).Value = 276
+        ws.Cells(6, 1).Value = 3298
+        ws.Cells(7, 1).Value = 3273
+        MsgBox "La feuille '" & CONFIG_SHEET & "' a ete creee avec des codes par defaut." & vbCrLf & _
+               "Modifiez la colonne A pour ajuster les codes a exclure, puis relancez la macro.", _
+               vbInformation, "Config creee"
+    End If
+    
+    lastRow = ws.Cells(ws.Rows.count, 1).End(xlUp).Row
+    
+    If lastRow < 2 Then
+        ReDim result(0)
+        result(0) = ""
+        GetOmittedCodes = result
+        Exit Function
+    End If
+    
+    count = 0
+    ReDim result(lastRow - 2)
+    
+    For i = 2 To lastRow
+        Dim cellVal As String
+        cellVal = Trim(CStr(ws.Cells(i, 1).Value))
+        If Len(cellVal) > 0 Then
+            result(count) = cellVal
+            count = count + 1
+        End If
+    Next i
+    
+    If count = 0 Then
+        ReDim result(0)
+        result(0) = ""
+    Else
+        ReDim Preserve result(count - 1)
+    End If
+    
+    GetOmittedCodes = result
+End Function
+
 
 ' ============ POINT D'ENTREE PRINCIPAL ============
 Public Sub UpdateDashboard()
@@ -43,28 +110,43 @@ Public Sub UpdateDashboard()
     
     On Error GoTo ErrHandler
     
-    ' 1. Chercher le mail et sauvegarder la PJ
-    Dim excelPath As String
-    log = log & "1. Recherche du mail SCEMEA dans Outlook..." & vbCrLf
-    excelPath = FindAndSaveAttachment()
-    If excelPath = "" Then
-        MsgBox "Aucun mail SCEMEA trouve avec piece jointe Excel." & vbCrLf & vbCrLf & _
-               "Verifiez que le mail 'SCEMEA #Daily Report-FR' est dans votre boite de reception.", _
-               vbExclamation, "LUHUT Dashboard"
+    ' 0. Lire les codes omis depuis la feuille Config
+    Dim omittedCodes() As String
+    omittedCodes = GetOmittedCodes()
+    log = log & "0. Codes omis : " & Join(omittedCodes, ", ") & vbCrLf
+    
+    ' 1. Chercher TOUS les mails SCEMEA non lus
+    log = log & "1. Recherche des mails SCEMEA non lus..." & vbCrLf
+    Dim mailPaths As Collection  ' Collection de chemins de fichiers temp
+    Dim mailItems As Collection  ' Collection des objets mail Outlook (pour les marquer lus)
+    Set mailPaths = New Collection
+    Set mailItems = New Collection
+    
+    FindUnreadAttachments mailPaths, mailItems
+    
+    If mailPaths.count = 0 Then
+        MsgBox "Aucun mail SCEMEA non lu trouve avec piece jointe Excel." & vbCrLf & vbCrLf & _
+               "Verifiez que des mails 'SCEMEA #Daily Report-FR' non lus" & vbCrLf & _
+               "sont dans votre dossier SCEMEA.", _
+               vbExclamation, "SCEMEA Dashboard"
         Exit Sub
     End If
-    log = log & "   OK : " & excelPath & vbCrLf
+    log = log & "   OK : " & mailPaths.count & " mail(s) non lu(s) trouve(s)" & vbCrLf
     
-    ' 2. Lire les donnees LUHUT
-    log = log & "2. Lecture des donnees LUHUT..." & vbCrLf
+    ' 2. Lire les donnees de CHAQUE piece jointe et accumuler
+    log = log & "2. Lecture des donnees (tous supervisors, " & mailPaths.count & " rapport(s))..." & vbCrLf
     Dim jsonEvents As String
     Dim nbEvents As Long
-    jsonEvents = ReadLuhutData(excelPath, nbEvents)
+    Dim supervisorList As String
+    jsonEvents = ReadAllMailsData(mailPaths, nbEvents, omittedCodes, supervisorList)
     If jsonEvents = "" Then
-        MsgBox "Aucune donnee LUHUT trouvee dans le rapport.", vbExclamation, "LUHUT Dashboard"
+        MsgBox "Aucune donnee trouvee dans les rapports.", vbExclamation, "SCEMEA Dashboard"
+        ' Nettoyage des fichiers temp meme en cas d'echec
+        CleanupTempFiles mailPaths
         Exit Sub
     End If
     log = log & "   OK : " & nbEvents & " evenements extraits" & vbCrLf
+    log = log & "   Supervisors : " & supervisorList & vbCrLf
     
     ' 3. Recuperer l'historique GitHub
     log = log & "3. Recuperation historique GitHub..." & vbCrLf
@@ -85,61 +167,80 @@ Public Sub UpdateDashboard()
     success = PushToGithub(mergedJson, existingSha)
     
     If success Then
-        log = log & "   OK : Pousse avec succes !" & vbCrLf & vbCrLf
-        log = log & "Dashboard : https://" & GITHUB_USER & ".github.io/" & GITHUB_REPO & "/"
+        log = log & "   OK : Pousse avec succes !" & vbCrLf
+        
+        ' 6. Marquer les mails comme lus
+        log = log & "6. Marquage des mails comme lus..." & vbCrLf
+        Dim mi As Long
+        For mi = 1 To mailItems.count
+            mailItems(mi).UnRead = False
+        Next mi
+        log = log & "   OK : " & mailItems.count & " mail(s) marque(s) lu(s)" & vbCrLf
+        
         MsgBox "Mise a jour terminee !" & vbCrLf & vbCrLf & _
-               nbEvents & " evenements LUHUT envoyes." & vbCrLf & vbCrLf & _
+               mailPaths.count & " rapport(s) traite(s)" & vbCrLf & _
+               nbEvents & " evenements envoyes" & vbCrLf & _
+               "Supervisors : " & supervisorList & vbCrLf & vbCrLf & _
+               "Les mails ont ete marques comme lus." & vbCrLf & vbCrLf & _
                "Dashboard : https://" & GITHUB_USER & ".github.io/" & GITHUB_REPO & "/", _
-               vbInformation, "LUHUT Dashboard"
+               vbInformation, "SCEMEA Dashboard"
     Else
         MsgBox "Donnees extraites mais erreur lors de l'envoi GitHub." & vbCrLf & _
-               "Verifiez votre token et vos permissions.", vbExclamation, "LUHUT Dashboard"
+               "Les mails restent non lus." & vbCrLf & _
+               "Verifiez votre token et vos permissions.", vbExclamation, "SCEMEA Dashboard"
     End If
     
-    ' Nettoyage fichier temp
-    On Error Resume Next
-    Kill excelPath
-    On Error GoTo 0
+    ' Nettoyage fichiers temp
+    CleanupTempFiles mailPaths
     
     Exit Sub
     
 ErrHandler:
     MsgBox "Erreur : " & Err.Description & vbCrLf & vbCrLf & _
-           "Log :" & vbCrLf & log, vbCritical, "LUHUT Dashboard - Erreur"
+           "Les mails restent non lus." & vbCrLf & vbCrLf & _
+           "Log :" & vbCrLf & log, vbCritical, "SCEMEA Dashboard - Erreur"
+    CleanupTempFiles mailPaths
 End Sub
 
 
-' ============ 1. CHERCHER LE MAIL OUTLOOK ============
-Private Function FindAndSaveAttachment() As String
-    FindAndSaveAttachment = ""
+' ============ NETTOYAGE FICHIERS TEMP ============
+Private Sub CleanupTempFiles(paths As Collection)
+    If paths Is Nothing Then Exit Sub
+    Dim i As Long
+    On Error Resume Next
+    For i = 1 To paths.count
+        Kill paths(i)
+    Next i
+    On Error GoTo 0
+End Sub
+
+
+' ============ 1. CHERCHER TOUS LES MAILS SCEMEA NON LUS ============
+Private Sub FindUnreadAttachments(ByRef paths As Collection, ByRef items As Collection)
     
     Dim olApp As Object
     Dim olNs As Object
     
-    ' Connexion a Outlook (late binding, pas besoin de reference)
     Set olApp = CreateObject("Outlook.Application")
     Set olNs = olApp.GetNamespace("MAPI")
     
-    ' Chercher dans le dossier SCEMEA (sous-dossier de la mailbox)
     Dim olInbox As Object
     Dim olFolder As Object
-    Set olInbox = olNs.GetDefaultFolder(6) ' 6 = olFolderInbox
+    Set olInbox = olNs.GetDefaultFolder(6)
     
-    ' Essayer : Inbox > SCEMEA
+    ' Chercher le dossier SCEMEA
     On Error Resume Next
     Set olFolder = olInbox.Folders("SCEMEA")
     On Error GoTo 0
     
-    ' Si pas trouve dans Inbox, chercher au niveau racine de la mailbox
     If olFolder Is Nothing Then
         Dim rootFolder As Object
-        Set rootFolder = olInbox.Parent ' racine de la mailbox
+        Set rootFolder = olInbox.Parent
         On Error Resume Next
         Set olFolder = rootFolder.Folders("SCEMEA")
         On Error GoTo 0
     End If
     
-    ' Si toujours pas trouve, chercher dans tous les dossiers racine
     If olFolder Is Nothing Then
         Dim acct As Object
         For Each acct In olNs.Folders
@@ -152,63 +253,149 @@ Private Function FindAndSaveAttachment() As String
     
     If olFolder Is Nothing Then
         MsgBox "Dossier 'SCEMEA' introuvable dans Outlook." & vbCrLf & _
-               "Verifiez le nom exact du dossier.", vbExclamation, "LUHUT Dashboard"
-        Exit Function
+               "Verifiez le nom exact du dossier.", vbExclamation, "SCEMEA Dashboard"
+        Exit Sub
     End If
     
-    ' Trier par date decroissante
+    ' Trier par date croissante (plus ancien d'abord â†’ traitement chronologique)
     Dim olItems As Object
-    Set olItems = olFolder.Items
-    olItems.Sort "[ReceivedTime]", True
+    Set olItems = olFolder.items
+    olItems.Sort "[ReceivedTime]", False
     
-    ' Chercher le mail le plus recent avec le bon sujet
+    ' Parcourir tous les mails non lus
     Dim item As Object
+    Dim mailCount As Long: mailCount = 0
+    
     For Each item In olItems
-        ' Verifier que c'est un mail (Class = 43)
+        ' Verifier : mail (Class=43), non lu, bon sujet, bon expediteur
         If item.Class = 43 Then
-            
-            ' Verifier sujet et expediteur
-            If InStr(1, item.Subject, MAIL_SUBJECT, vbTextCompare) > 0 Then
-                If InStr(1, item.SenderEmailAddress, MAIL_SENDER, vbTextCompare) > 0 Or _
-                   InStr(1, item.SenderName, "SCEMEA", vbTextCompare) > 0 Then
-                    
-                    ' Chercher la piece jointe Excel
-                    Dim att As Object
-                    For Each att In item.Attachments
-                        If LCase(Right(att.FileName, 5)) = ".xlsx" Or _
-                           LCase(Right(att.FileName, 4)) = ".xls" Then
-                            
-                            ' Sauvegarder dans TEMP
-                            Dim tempPath As String
-                            tempPath = Environ("TEMP") & "\LUHUT_SCEMEA_" & Format(Now, "yyyyMMdd_HHmmss") & ".xlsx"
-                            att.SaveAsFile tempPath
-                            FindAndSaveAttachment = tempPath
-                            Exit Function
-                        End If
-                    Next att
+            If item.UnRead Then
+                If InStr(1, item.Subject, MAIL_SUBJECT, vbTextCompare) > 0 Then
+                    If InStr(1, item.SenderEmailAddress, MAIL_SENDER, vbTextCompare) > 0 Or _
+                       InStr(1, item.SenderName, "SCEMEA", vbTextCompare) > 0 Then
+                        
+                        ' Chercher la piece jointe Excel
+                        Dim att As Object
+                        For Each att In item.Attachments
+                            If LCase(Right(att.FileName, 5)) = ".xlsx" Or _
+                               LCase(Right(att.FileName, 4)) = ".xls" Then
+                                
+                                mailCount = mailCount + 1
+                                Dim tempPath As String
+                                tempPath = Environ("TEMP") & "\SCEMEA_" & Format(Now, "yyyyMMdd_HHmmss") & "_" & mailCount & ".xlsx"
+                                att.SaveAsFile tempPath
+                                paths.Add tempPath
+                                items.Add item
+                                Exit For ' Un seul fichier Excel par mail
+                            End If
+                        Next att
+                    End If
                 End If
             End If
         End If
     Next item
+End Sub
+
+
+' ============ 2. LIRE LES DONNEES DE TOUS LES MAILS ============
+Private Function ReadAllMailsData(mailPaths As Collection, ByRef nbEvents As Long, omitArr() As String, ByRef supervisorList As String) As String
+    ReadAllMailsData = ""
+    nbEvents = 0
+    supervisorList = ""
+    
+    ' Dictionnaire global qui accumule tous les evenements de tous les mails
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    
+    ' Tracker les supervisors trouves
+    Dim supDict As Object
+    Set supDict = CreateObject("Scripting.Dictionary")
+    
+    ' Traiter chaque fichier Excel
+    Dim fi As Long
+    For fi = 1 To mailPaths.count
+        ReadOneFile mailPaths(fi), dict, supDict, omitArr
+    Next fi
+    
+    If dict.count = 0 Then Exit Function
+    
+    ' Construire la liste des supervisors
+    Dim supKey As Variant
+    Dim supList As String: supList = ""
+    For Each supKey In supDict.Keys
+        If Len(supList) > 0 Then supList = supList & ", "
+        supList = supList & CStr(supKey)
+    Next supKey
+    supervisorList = supList
+    
+    ' Construire le JSON par jour
+    Dim dateDict As Object
+    Set dateDict = CreateObject("Scripting.Dictionary")
+    
+    Dim k As Variant
+    Dim arr As Variant
+    For Each k In dict.Keys
+        arr = dict(k)
+        Dim dt As String
+        dt = arr(0) ' date
+        
+        Dim evJson As String
+        evJson = "{" & _
+            """supervisor"":" & JsonStr(CStr(arr(1))) & "," & _
+            """code"":" & JsonStr(CStr(arr(2))) & "," & _
+            """event"":" & JsonStr(CStr(arr(3))) & "," & _
+            """severity"":" & JsonStr(CStr(arr(4))) & "," & _
+            """park"":" & JsonStr(CStr(arr(5))) & "," & _
+            """count"":" & arr(6) & "," & _
+            """lastSeen"":" & JsonStr(CStr(arr(7))) & "," & _
+            """turbines"":" & JsonStr(CStr(arr(8))) & _
+            "}"
+        
+        nbEvents = nbEvents + CLng(arr(6))
+        
+        If dateDict.Exists(dt) Then
+            dateDict(dt) = dateDict(dt) & "," & evJson
+        Else
+            dateDict.Add dt, evJson
+        End If
+    Next k
+    
+    ' Construire le JSON final trie par date
+    Dim dayJsonParts() As String
+    ReDim dayJsonParts(dateDict.count - 1)
+    Dim idx As Long: idx = 0
+    
+    Dim dateKeys() As String
+    ReDim dateKeys(dateDict.count - 1)
+    Dim di As Long: di = 0
+    For Each k In dateDict.Keys
+        dateKeys(di) = CStr(k)
+        di = di + 1
+    Next k
+    SortStringArray dateKeys
+    
+    For di = LBound(dateKeys) To UBound(dateKeys)
+        dayJsonParts(idx) = "{""date"":" & JsonStr(dateKeys(di)) & ",""events"":[" & dateDict(dateKeys(di)) & "]}"
+        idx = idx + 1
+    Next di
+    
+    ReadAllMailsData = Join(dayJsonParts, ",")
 End Function
 
 
-' ============ 2. LIRE LES DONNEES LUHUT ============
-Private Function ReadLuhutData(excelPath As String, ByRef nbEvents As Long) As String
-    ReadLuhutData = ""
-    nbEvents = 0
+' ============ LIRE UN FICHIER EXCEL ET ACCUMULER DANS LE DICTIONNAIRE ============
+Private Sub ReadOneFile(excelPath As String, ByRef dict As Object, ByRef supDict As Object, omitArr() As String)
     
     Dim wbSource As Workbook
     Dim wsSource As Worksheet
     Dim lastRow As Long, lastCol As Long
     
-    ' Ouvrir le fichier en lecture seule
     Application.ScreenUpdating = False
     Set wbSource = Workbooks.Open(excelPath, ReadOnly:=True, UpdateLinks:=False)
     Set wsSource = wbSource.Sheets(1)
     
-    lastRow = wsSource.UsedRange.Rows.Count
-    lastCol = wsSource.UsedRange.Columns.Count
+    lastRow = wsSource.UsedRange.Rows.count
+    lastCol = wsSource.UsedRange.Columns.count
     
     ' Trouver les colonnes par en-tete
     Dim colSup As Long, colPark As Long, colTurbine As Long
@@ -230,132 +417,71 @@ Private Function ReadLuhutData(excelPath As String, ByRef nbEvents As Long) As S
     If colSup = 0 Or colCode = 0 Then
         wbSource.Close False
         Application.ScreenUpdating = True
-        Exit Function
+        Exit Sub
     End If
-    
-    ' Extraire les lignes LUHUT et grouper par date+code+event+severity+park
-    Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
-    
-    Dim omitArr() As String
-    omitArr = Split(OMITTED_CODES, ",")
     
     Dim r As Long
     For r = 2 To lastRow
         Dim sup As String
         sup = Trim(CStr(wsSource.Cells(r, colSup).Value))
         
-        If sup = SUPERVISOR Then
-            Dim evCode As String
-            evCode = Trim(CStr(wsSource.Cells(r, colCode).Value))
-            
-            ' Verifier si code omis
-            Dim isOmitted As Boolean
-            isOmitted = False
-            Dim oi As Long
-            For oi = LBound(omitArr) To UBound(omitArr)
-                If Trim(omitArr(oi)) = evCode Then isOmitted = True: Exit For
-            Next oi
-            If isOmitted Then GoTo NextRow
-            
-            Dim evText As String, evSev As String, evPark As String, evTurb As String
-            evText = Trim(CStr(wsSource.Cells(r, colText).Value))
-            evSev = Trim(CStr(wsSource.Cells(r, colSev).Value))
-            evPark = Trim(CStr(wsSource.Cells(r, colPark).Value))
-            If colTurbine > 0 Then evTurb = Trim(CStr(wsSource.Cells(r, colTurbine).Value)) Else evTurb = ""
-            
-            ' Date
-            Dim evDate As String, evTime As String
-            Dim rawTime As Variant
-            rawTime = wsSource.Cells(r, colTime).Value
-            If IsDate(rawTime) Then
-                evDate = Format(CDate(rawTime), "yyyy-mm-dd")
-                evTime = Format(CDate(rawTime), "dd/mm hh:nn")
-            Else
-                evDate = Format(Now, "yyyy-mm-dd")
-                evTime = CStr(rawTime)
+        If Len(sup) = 0 Then GoTo NextRow
+        
+        If Not supDict.Exists(sup) Then supDict.Add sup, True
+        
+        Dim evCode As String
+        evCode = Trim(CStr(wsSource.Cells(r, colCode).Value))
+        
+        ' Verifier si code omis
+        Dim isOmitted As Boolean
+        isOmitted = False
+        Dim oi As Long
+        For oi = LBound(omitArr) To UBound(omitArr)
+            If Trim(omitArr(oi)) = evCode Then isOmitted = True: Exit For
+        Next oi
+        If isOmitted Then GoTo NextRow
+        
+        Dim evText As String, evSev As String, evPark As String, evTurb As String
+        evText = Trim(CStr(wsSource.Cells(r, colText).Value))
+        evSev = Trim(CStr(wsSource.Cells(r, colSev).Value))
+        evPark = Trim(CStr(wsSource.Cells(r, colPark).Value))
+        If colTurbine > 0 Then evTurb = Trim(CStr(wsSource.Cells(r, colTurbine).Value)) Else evTurb = ""
+        
+        ' Date
+        Dim evDate As String, evTime As String
+        Dim rawTime As Variant
+        rawTime = wsSource.Cells(r, colTime).Value
+        If IsDate(rawTime) Then
+            evDate = Format(CDate(rawTime), "yyyy-mm-dd")
+            evTime = Format(CDate(rawTime), "dd/mm hh:nn")
+        Else
+            evDate = Format(Now, "yyyy-mm-dd")
+            evTime = CStr(rawTime)
+        End If
+        
+        ' Cle de regroupement : inclut le supervisor
+        Dim key As String
+        key = evDate & "|" & sup & "|" & evCode & "|" & evText & "|" & evSev & "|" & evPark
+        
+        If dict.Exists(key) Then
+            Dim arr As Variant
+            arr = dict(key)
+            arr(6) = arr(6) + 1 ' count
+            If Len(evTurb) > 0 And InStr(arr(8), evTurb) = 0 Then
+                If Len(arr(8)) > 0 Then arr(8) = arr(8) & ", " & evTurb Else arr(8) = evTurb
             End If
-            
-            ' Cle de regroupement
-            Dim key As String
-            key = evDate & "|" & evCode & "|" & evText & "|" & evSev & "|" & evPark
-            
-            If dict.Exists(key) Then
-                ' Incrementer count, ajouter turbine
-                Dim arr As Variant
-                arr = dict(key)
-                arr(5) = arr(5) + 1 ' count
-                If Len(evTurb) > 0 And InStr(arr(7), evTurb) = 0 Then
-                    If Len(arr(7)) > 0 Then arr(7) = arr(7) & ", " & evTurb Else arr(7) = evTurb
-                End If
-                If evTime > arr(6) Then arr(6) = evTime ' lastSeen
-                dict(key) = arr
-            Else
-                ' Nouveau : Array(date, code, event, severity, park, count, lastSeen, turbines)
-                dict.Add key, Array(evDate, evCode, evText, evSev, evPark, 1, evTime, evTurb)
-            End If
+            If evTime > arr(7) Then arr(7) = evTime ' lastSeen
+            dict(key) = arr
+        Else
+            ' Array(date, supervisor, code, event, severity, park, count, lastSeen, turbines)
+            dict.Add key, Array(evDate, sup, evCode, evText, evSev, evPark, 1, evTime, evTurb)
         End If
 NextRow:
     Next r
     
     wbSource.Close False
     Application.ScreenUpdating = True
-    
-    If dict.Count = 0 Then Exit Function
-    
-    ' Construire le JSON par jour
-    ' D'abord regrouper par date
-    Dim dateDict As Object
-    Set dateDict = CreateObject("Scripting.Dictionary")
-    
-    Dim k As Variant
-    For Each k In dict.Keys
-        arr = dict(k)
-        Dim dt As String
-        dt = arr(0) ' date
-        
-        Dim evJson As String
-        evJson = "{" & _
-            """code"":" & JsonStr(CStr(arr(1))) & "," & _
-            """event"":" & JsonStr(CStr(arr(2))) & "," & _
-            """severity"":" & JsonStr(CStr(arr(3))) & "," & _
-            """park"":" & JsonStr(CStr(arr(4))) & "," & _
-            """count"":" & arr(5) & "," & _
-            """lastSeen"":" & JsonStr(CStr(arr(6))) & "," & _
-            """turbines"":" & JsonStr(CStr(arr(7))) & _
-            "}"
-        
-        nbEvents = nbEvents + CLng(arr(5))
-        
-        If dateDict.Exists(dt) Then
-            dateDict(dt) = dateDict(dt) & "," & evJson
-        Else
-            dateDict.Add dt, evJson
-        End If
-    Next k
-    
-    ' Construire le JSON final : tableau de jours
-    Dim dayJsonParts() As String
-    ReDim dayJsonParts(dateDict.Count - 1)
-    Dim idx As Long: idx = 0
-    
-    ' Trier les dates (simple tri par string car format yyyy-mm-dd)
-    Dim dateKeys() As String
-    ReDim dateKeys(dateDict.Count - 1)
-    Dim di As Long: di = 0
-    For Each k In dateDict.Keys
-        dateKeys(di) = CStr(k)
-        di = di + 1
-    Next k
-    SortStringArray dateKeys
-    
-    For di = LBound(dateKeys) To UBound(dateKeys)
-        dayJsonParts(idx) = "{""date"":" & JsonStr(dateKeys(di)) & ",""events"":[" & dateDict(dateKeys(di)) & "]}"
-        idx = idx + 1
-    Next di
-    
-    ReadLuhutData = Join(dayJsonParts, ",")
-End Function
+End Sub
 
 
 ' ============ 3. RECUPERER HISTORIQUE GITHUB ============
@@ -371,39 +497,31 @@ Private Sub GetGithubHistory(ByRef existingJson As String, ByRef existingSha As 
     http.Open "GET", url, False
     http.setRequestHeader "Authorization", "Bearer " & GITHUB_TOKEN
     http.setRequestHeader "Accept", "application/vnd.github+json"
-    http.setRequestHeader "User-Agent", "LUHUT-VBA-Updater"
+    http.setRequestHeader "User-Agent", "SCEMEA-VBA-Updater"
     http.Send
     
     If http.Status = 200 Then
         Dim respText As String
         respText = http.responseText
         
-        ' Extraire le SHA
         existingSha = ExtractJsonValue(respText, "sha")
         
-        ' Extraire le contenu base64
         Dim b64Content As String
         b64Content = ExtractJsonValue(respText, "content")
-        ' Retirer les \n du base64
         b64Content = Replace(b64Content, "\n", "")
         b64Content = Replace(b64Content, vbLf, "")
         b64Content = Replace(b64Content, vbCr, "")
         
-        ' Decoder base64
         existingJson = DecodeBase64(b64Content)
         
-        ' Nettoyer le JSON : s'assurer qu'il est bien forme
         existingJson = Trim(existingJson)
-        ' Retirer BOM si present
         If Len(existingJson) > 0 And AscW(Left(existingJson, 1)) = 65279 Then
             existingJson = Mid(existingJson, 2)
         End If
-        ' S'assurer que ca commence par [ et finit par ]
         If Left(existingJson, 1) <> "[" Then existingJson = ""
         If Len(existingJson) > 0 And Right(existingJson, 1) <> "]" Then existingJson = ""
         
     ElseIf http.Status = 404 Then
-        ' Pas de fichier existant, c'est OK
         existingJson = ""
         existingSha = ""
     Else
@@ -414,19 +532,14 @@ End Sub
 
 ' ============ 4. FUSIONNER HISTORIQUE ============
 Private Function MergeHistory(existingJson As String, newDaysJson As String) As String
-    ' Strategie : parser les dates existantes, remplacer/ajouter les nouvelles
-    ' Format : [{"date":"2026-02-17","events":[...]},...]
-    
     If existingJson = "" Or existingJson = "[]" Then
         MergeHistory = "[" & newDaysJson & "]"
         Exit Function
     End If
     
-    ' Extraire les jours existants dans un dictionnaire par date
     Dim dateDict As Object
     Set dateDict = CreateObject("Scripting.Dictionary")
     
-    ' Parser les jours existants
     Dim existingDays() As String
     existingDays = SplitJsonDays(existingJson)
     
@@ -441,7 +554,6 @@ Private Function MergeHistory(existingJson As String, newDaysJson As String) As 
         End If
     Next i
     
-    ' Parser les nouveaux jours et remplacer/ajouter
     Dim newDays() As String
     newDays = SplitJsonDays("[" & newDaysJson & "]")
     
@@ -450,14 +562,13 @@ Private Function MergeHistory(existingJson As String, newDaysJson As String) As 
             Dim newDate As String
             newDate = ExtractJsonValue(newDays(i), "date")
             If Len(newDate) > 0 Then
-                dateDict(newDate) = newDays(i) ' ecrase si existe
+                dateDict(newDate) = newDays(i)
             End If
         End If
     Next i
     
-    ' Reconstruire le JSON trie par date
     Dim allDates() As String
-    ReDim allDates(dateDict.Count - 1)
+    ReDim allDates(dateDict.count - 1)
     Dim di As Long: di = 0
     Dim k As Variant
     For Each k In dateDict.Keys
@@ -483,11 +594,9 @@ Private Function PushToGithub(jsonContent As String, sha As String) As Boolean
     Dim url As String
     url = "https://api.github.com/repos/" & GITHUB_USER & "/" & GITHUB_REPO & "/contents/" & HISTORY_FILE
     
-    ' Encoder le contenu en base64
     Dim b64Content As String
     b64Content = EncodeBase64(jsonContent)
     
-    ' Construire le body JSON
     Dim today As String
     today = Format(Now, "yyyy-mm-dd hh:nn")
     
@@ -508,7 +617,7 @@ Private Function PushToGithub(jsonContent As String, sha As String) As Boolean
     http.setRequestHeader "Authorization", "Bearer " & GITHUB_TOKEN
     http.setRequestHeader "Accept", "application/vnd.github+json"
     http.setRequestHeader "Content-Type", "application/json"
-    http.setRequestHeader "User-Agent", "LUHUT-VBA-Updater"
+    http.setRequestHeader "User-Agent", "SCEMEA-VBA-Updater"
     http.Send body
     
     If http.Status = 200 Or http.Status = 201 Then
@@ -523,7 +632,6 @@ End Function
 ' FONCTIONS UTILITAIRES
 ' â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-' Echapper une string pour JSON
 Private Function JsonStr(s As String) As String
     Dim result As String
     result = Replace(s, "\", "\\")
@@ -534,7 +642,6 @@ Private Function JsonStr(s As String) As String
     JsonStr = """" & result & """"
 End Function
 
-' Extraire une valeur simple d'un JSON (parsing minimal)
 Private Function ExtractJsonValue(json As String, key As String) As String
     ExtractJsonValue = ""
     Dim searchKey As String
@@ -544,17 +651,14 @@ Private Function ExtractJsonValue(json As String, key As String) As String
     pos = InStr(1, json, searchKey)
     If pos = 0 Then Exit Function
     
-    ' Trouver le : apres la cle
     pos = InStr(pos + Len(searchKey), json, ":")
     If pos = 0 Then Exit Function
     pos = pos + 1
     
-    ' Ignorer les espaces
     Do While Mid(json, pos, 1) = " " Or Mid(json, pos, 1) = vbTab
         pos = pos + 1
     Loop
     
-    ' Si la valeur commence par " c'est une string
     If Mid(json, pos, 1) = """" Then
         pos = pos + 1
         Dim endPos As Long
@@ -567,7 +671,6 @@ Private Function ExtractJsonValue(json As String, key As String) As String
         Loop
         ExtractJsonValue = Mid(json, pos, endPos - pos)
     Else
-        ' Valeur non-string (nombre, bool, etc)
         endPos = pos
         Do While endPos <= Len(json) And InStr(",}] " & vbCrLf, Mid(json, endPos, 1)) = 0
             endPos = endPos + 1
@@ -576,17 +679,14 @@ Private Function ExtractJsonValue(json As String, key As String) As String
     End If
 End Function
 
-' Splitter un tableau JSON de jours en elements individuels
 Private Function SplitJsonDays(json As String) As String()
     Dim result() As String
     Dim trimmed As String
     trimmed = Trim(json)
     
-    ' Retirer les [ ] externes
     If Left(trimmed, 1) = "[" Then trimmed = Mid(trimmed, 2)
     If Right(trimmed, 1) = "]" Then trimmed = Left(trimmed, Len(trimmed) - 1)
     
-    ' Splitter sur },{ en respectant la profondeur
     Dim parts As New Collection
     Dim depth As Long: depth = 0
     Dim start As Long: start = 1
@@ -603,20 +703,18 @@ Private Function SplitJsonDays(json As String) As String()
         End If
     Next i
     
-    ' Dernier element
     If start <= Len(trimmed) Then
         parts.Add Trim(Mid(trimmed, start))
     End If
     
-    ReDim result(parts.Count - 1)
-    For i = 1 To parts.Count
+    ReDim result(parts.count - 1)
+    For i = 1 To parts.count
         result(i - 1) = parts(i)
     Next i
     
     SplitJsonDays = result
 End Function
 
-' Encoder en Base64
 Private Function EncodeBase64(text As String) As String
     Dim arrBytes() As Byte
     arrBytes = StrConv(text, vbFromUnicode)
@@ -630,7 +728,6 @@ Private Function EncodeBase64(text As String) As String
     EncodeBase64 = Replace(objNode.text, vbLf, "")
 End Function
 
-' Decoder du Base64
 Private Function DecodeBase64(b64 As String) As String
     Dim objXML As Object
     Dim objNode As Object
@@ -644,7 +741,6 @@ Private Function DecodeBase64(b64 As String) As String
     DecodeBase64 = StrConv(arrBytes, vbUnicode)
 End Function
 
-' Tri simple d'un tableau de strings
 Private Sub SortStringArray(arr() As String)
     Dim i As Long, j As Long, tmp As String
     For i = LBound(arr) To UBound(arr) - 1
