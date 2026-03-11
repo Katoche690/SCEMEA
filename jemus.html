@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JEMUS — Afficheur</title>
+<title>Afficheur</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -95,7 +95,7 @@ html,body{
 <div class="dashboard">
   <div class="topbar">
     <div class="topbar-left">
-      <h1>JEMUS</h1>
+      <h1 id="sup-title"></h1>
       <p>Alarm & Warning — 7 jours glissants</p>
     </div>
     <div class="topbar-right">
@@ -125,15 +125,23 @@ html,body{
 <div class="no-data" id="no-data" style="display:none;">Aucune donnée — lancez la macro Excel.</div>
 
 <script>
+// ╔══════════════════════════════════════════════════════╗
+// ║  MODIFIER ICI POUR CHANGER DE SUPERVISOR            ║
+// ╚══════════════════════════════════════════════════════╝
 const SUPERVISOR = 'JEMUS';
-const DAYS = 7;
+// ───────────────────────────────────────────────────────
 
+const DAYS = 7;
 let parksChart, topChart, timeChart;
+
+// Appliquer le nom du supervisor partout
+document.getElementById('sup-title').textContent = SUPERVISOR;
+document.title = SUPERVISOR + ' — Afficheur';
 
 async function init() {
   let data;
   try {
-    const r = await fetch('history.json?t='+Date.now());
+    const r = await fetch('history_' + SUPERVISOR.toLowerCase() + '.json?t='+Date.now());
     if (!r.ok) throw 0;
     data = await r.json();
   } catch(e) {
@@ -149,7 +157,6 @@ async function init() {
   let events = [];
   data.filter(d=>d.date>=cutStr).forEach(day=>{
     day.events.forEach(ev=>{
-      if(ev.supervisor !== SUPERVISOR) return;
       events.push({...ev, date:day.date});
     });
   });
@@ -167,7 +174,6 @@ async function init() {
 
   // Chart defaults
   Chart.defaults.font.family = "'DM Sans',sans-serif";
-  //Chart.defaults.color = '#6b7394';
   Chart.defaults.color = '#f0f0f0';
 
   drawParks(events);
@@ -181,7 +187,7 @@ function drawParks(events) {
     if(!byPark[e.park]) byPark[e.park]={a:0,w:0};
     if(e.severity==='Alarm') byPark[e.park].a+=e.count; else byPark[e.park].w+=e.count;
   });
-  const sorted=Object.entries(byPark).sort((a,b)=>(b[1].a+b[1].w)-(a[1].a+a[1].w));
+  const sorted=Object.entries(byPark).sort((a,b)=>(b[1].a+b[1].w)-(a[1].a+a[1].w)).slice(0,10);
 
   parksChart = new Chart(document.getElementById('parksChart'),{
     type:'bar',

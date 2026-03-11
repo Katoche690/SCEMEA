@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JEMUS — Dashboard</title>
+<title>Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -169,7 +169,7 @@ tr:hover td{background:rgba(74,124,255,0.03);}
 <div class="header">
   <div class="header-left">
     <div class="header-title">
-      <h1>JEMUS</h1>
+      <h1 id="sup-title"></h1>
       <p>Alarm & Warning Dashboard</p>
     </div>
   </div>
@@ -254,7 +254,7 @@ tr:hover td{background:rgba(74,124,255,0.03);}
 </div>
 
 <div class="footer">
-  JEMUS — Données SCEMEA Daily Report FR
+  <span id="sup-footer"></span> — Données SCEMEA Daily Report FR
 </div>
 
 <div class="no-data" id="no-data" style="display:none;">
@@ -263,17 +263,28 @@ tr:hover td{background:rgba(74,124,255,0.03);}
 </div>
 
 <script>
+// ╔══════════════════════════════════════════════════════╗
+// ║  MODIFIER ICI POUR CHANGER DE SUPERVISOR            ║
+// ╚══════════════════════════════════════════════════════╝
+const SUPERVISOR = 'JEMUS';
+// ───────────────────────────────────────────────────────
+
+// Appliquer le nom du supervisor partout
+document.getElementById('sup-title').textContent = SUPERVISOR;
+document.getElementById('sup-footer').textContent = SUPERVISOR;
+document.title = SUPERVISOR + ' — Dashboard';
+
 let HISTORY = [];
 let currentPeriod = '7d';
 let currentSeverity = 'all';
-let currentSupervisor = 'JEMUS';
+let currentSupervisor = SUPERVISOR;
 let timelineChart, topEventsChart, parksChart;
 
 const PERIOD_DAYS = {'7d':7,'1m':30,'3m':90,'6m':180,'1y':365};
 
 async function loadData() {
   try {
-    const resp = await fetch('history.json?t=' + Date.now());
+    const resp = await fetch('history_' + SUPERVISOR.toLowerCase() + '.json?t=' + Date.now());
     if (!resp.ok) throw new Error('No data file');
     HISTORY = await resp.json();
     render();

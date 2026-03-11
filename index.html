@@ -267,7 +267,12 @@ tr:hover td{background:rgba(74,124,255,0.03);}
 </div>
 
 <script>
-let HISTORY = [];
+// ── Liste des supervisors disponibles ──
+// Ajouter ici chaque nouveau supervisor (en minuscules pour le nom de fichier)
+const SUPERVISORS = ['luhut','jemus','hicel','uebod','pipur','nimic','arlho','vared','oligu','sanco','jecha','bevea','edush','jemab','magcq','floli','syrua','dabue','aakot','mlaen','niban','seduf'];
+
+let HISTORY = [];        // données fusionnées de tous les supervisors
+let SUP_DATA = {};       // données par supervisor : { LUHUT: [...], JEMUS: [...] }
 let currentPeriod = '7d';
 let currentSeverity = 'all';
 let currentSupervisor = 'all';
@@ -277,10 +282,45 @@ const PERIOD_DAYS = {'7d':7,'1m':30,'3m':90,'6m':180,'1y':365};
 
 async function loadData() {
   try {
-    const resp = await fetch('history.json?t=' + Date.now());
-    if (!resp.ok) throw new Error('No data file');
-    HISTORY = await resp.json();
-    buildSupervisorButtons();
+    let allDays = {};   // date -> events[]
+    let foundAny = false;
+
+    // Charger chaque history_xxx.json en parallele
+    const results = await Promise.allSettled(
+      SUPERVISORS.map(async sup => {
+        const resp = await fetch('history_' + sup + '.json?t=' + Date.now());
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        return { sup: sup.toUpperCase(), data };
+      })
+    );
+
+    const loadedSups = [];
+    results.forEach(r => {
+      if (r.status === 'fulfilled' && r.value && r.value.data) {
+        const { sup, data } = r.value;
+        loadedSups.push(sup);
+        SUP_DATA[sup] = data;
+        // Fusionner dans allDays
+        data.forEach(day => {
+          if (!allDays[day.date]) allDays[day.date] = [];
+          day.events.forEach(ev => {
+            allDays[day.date].push({...ev, supervisor: sup});
+          });
+        });
+        foundAny = true;
+      }
+    });
+
+    if (!foundAny) throw new Error('No data');
+
+    // Construire HISTORY au format standard
+    HISTORY = Object.keys(allDays).sort().map(date => ({
+      date,
+      events: allDays[date]
+    }));
+
+    buildSupervisorButtons(loadedSups);
     render();
   } catch(e) {
     document.getElementById('no-data').style.display = 'block';
@@ -290,17 +330,9 @@ async function loadData() {
   }
 }
 
-function buildSupervisorButtons() {
-  // Extraire tous les supervisors uniques du history
-  const sups = new Set();
-  HISTORY.forEach(day => {
-    day.events.forEach(ev => {
-      if (ev.supervisor) sups.add(ev.supervisor);
-    });
-  });
-  const sorted = [...sups].sort();
+function buildSupervisorButtons(sups) {
+  const sorted = sups.sort();
   const container = document.querySelector('.sup-btn').parentElement;
-  // Garder le bouton "Tous" deja present, ajouter les autres
   sorted.forEach(s => {
     const btn = document.createElement('button');
     btn.className = 'filter-btn sup-btn';
@@ -481,7 +513,7 @@ function renderParks(events) {
     detail[e.park][ek].count += e.count;
     if (e.turbines) e.turbines.split(', ').forEach(t => detail[e.park][ek].turbines.add(t));
   });
-  const sorted = Object.entries(byPark).sort((a,b) => (b[1].alarm+b[1].warning) - (a[1].alarm+a[1].warning)).slice(0, 10);
+  const sorted = Object.entries(byPark).sort((a,b) => (b[1].alarm+b[1].warning) - (a[1].alarm+a[1].warning));
   const names = sorted.map(s=>s[0]);
 
   if (parksChart) parksChart.destroy();
