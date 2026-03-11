@@ -129,13 +129,14 @@ html,body{
 // ║  MODIFIER ICI POUR CHANGER DE SUPERVISOR            ║
 // ╚══════════════════════════════════════════════════════╝
 const SUPERVISOR = 'JEMUS';
+const SSU = 'SSU Centre';
 // ───────────────────────────────────────────────────────
 
 const DAYS = 7;
 let parksChart, topChart, timeChart;
 
 // Appliquer le nom du supervisor partout
-document.getElementById('sup-title').textContent = SUPERVISOR;
+document.getElementById('sup-title').textContent = SSU;
 document.title = SUPERVISOR + ' — Afficheur';
 
 async function init() {
