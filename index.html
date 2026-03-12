@@ -513,7 +513,7 @@ function renderParks(events) {
     detail[e.park][ek].count += e.count;
     if (e.turbines) e.turbines.split(', ').forEach(t => detail[e.park][ek].turbines.add(t));
   });
-  const sorted = Object.entries(byPark).sort((a,b) => (b[1].alarm+b[1].warning) - (a[1].alarm+a[1].warning));
+  const sorted = Object.entries(byPark).sort((a,b) => (b[1].alarm+b[1].warning) - (a[1].alarm+a[1].warning)).slice(0, 10); // affiche du top 10
   const names = sorted.map(s=>s[0]);
 
   if (parksChart) parksChart.destroy();
