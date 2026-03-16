@@ -277,7 +277,6 @@ document.title = SUPERVISOR + ' — Dashboard';
 let HISTORY = [];
 let currentPeriod = '7d';
 let currentSeverity = 'all';
-let currentSupervisor = SUPERVISOR;
 let timelineChart, topEventsChart, parksChart;
 
 const PERIOD_DAYS = {'7d':7,'1m':30,'3m':90,'6m':180,'1y':365};
@@ -306,7 +305,6 @@ function getFilteredData() {
   let events = [];
   HISTORY.filter(day => day.date >= cutoffStr).forEach(day => {
     day.events.forEach(ev => {
-      if (currentSupervisor !== 'all' && ev.supervisor !== currentSupervisor) return;
       if (currentSeverity !== 'all' && ev.severity !== currentSeverity) return;
       events.push({...ev, date: day.date});
     });
@@ -344,7 +342,6 @@ function render() {
   let prevEvents = [];
   HISTORY.filter(day => day.date >= prevStartStr && day.date < prevEndStr).forEach(day => {
     day.events.forEach(ev => {
-      if (currentSupervisor !== 'all' && ev.supervisor !== currentSupervisor) return;
       if (currentSeverity !== 'all' && ev.severity !== currentSeverity) return;
       prevEvents.push(ev);
     });
