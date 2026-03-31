@@ -3,326 +3,417 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Afficheur</title>
+<title>Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
+/* ═══ DARK MODE (default) ═══ */
 :root {
+  --bg: #08090d;
+  --surface: #111318;
+  --card: #161920;
+  --border: #1f2230;
+  --border-hover: #2d3148;
+  --text: #e4e8f1;
+  --text-dim: #8189a3;
+  --accent: #104277;
+  --accent-light: #1a5ba0;
+  --accent-glow: rgba(16,66,119,0.25);
+  --accent-text: #5b9fd4;
+  --alarm: #f0453a;
+  --alarm-bg: rgba(240,69,58,0.08);
+  --warning: #f5a623;
+  --warning-bg: rgba(245,166,35,0.08);
+  --green: #2dd4a0;
+  --green-bg: rgba(45,212,160,0.08);
+  --header-bg: linear-gradient(135deg,#0a1628 0%,#0f2847 50%,#0a1628 100%);
+  --header-glow: rgba(16,66,119,0.12);
+  --chart-grid: rgba(31,34,48,0.5);
+  --chart-text: #8189a3;
+  --chart-label: #e4e8f1;
+  --btn-bg: var(--card);
+  --btn-active-bg: var(--accent-light);
+  --btn-active-border: var(--accent-light);
+  --btn-active-shadow: rgba(16,66,119,0.4);
+  --th-bg: rgba(0,0,0,0.15);
+  --header-text: #e4e8f1;
+  --header-sub: #8189a3;
+  --header-stat-bg: rgba(255,255,255,0.04);
+  --header-stat-border: #1f2230;
+  --header-stat-lbl: #8189a3;
+  --hdr-trend-up: #f0453a;
+  --hdr-trend-down: #2dd4a0;
+  --hdr-trend-flat: #8189a3;
+  --card-shadow: none;
+  --toggle-bg: rgba(255,255,255,0.08);
+  --toggle-border: rgba(255,255,255,0.12);
+  --toggle-hover: rgba(255,255,255,0.14);
+  --toggle-text: rgba(255,255,255,0.7);
+}
+
+/* ═══ LIGHT MODE ═══ */
+html.light {
   --bg: #f3f4f6;
-  --card: #ffffff;
+  --surface: #fff;
+  --card: #fff;
   --border: #dde1e8;
+  --border-hover: #b8c0ce;
   --text: #1a2233;
   --text-dim: #5a6578;
   --accent: #104277;
   --accent-light: #1a5ba0;
+  --accent-glow: rgba(16,66,119,0.06);
   --accent-text: #104277;
   --alarm: #f0453a;
   --alarm-bg: rgba(240,69,58,0.10);
   --warning: #f5a623;
   --warning-bg: rgba(245,166,35,0.10);
   --green: #1a9a6e;
+  --green-bg: rgba(26,154,110,0.07);
   --header-bg: linear-gradient(135deg,#104277 0%,#1a5ba0 50%,#104277 100%);
   --header-glow: rgba(255,255,255,0.06);
   --chart-grid: rgba(0,0,0,0.06);
   --chart-text: #5a6578;
   --chart-label: #1a2233;
-  --card-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  --stat-bg: rgba(255,255,255,0.14);
-  --stat-border: rgba(255,255,255,0.22);
-  --stat-lbl: rgba(255,255,255,0.75);
+  --btn-bg: #fff;
+  --btn-active-bg: #104277;
+  --btn-active-border: #104277;
+  --btn-active-shadow: rgba(16,66,119,0.2);
+  --th-bg: rgba(16,66,119,0.04);
+  --header-text: #fff;
+  --header-sub: rgba(255,255,255,0.7);
+  --header-stat-bg: rgba(255,255,255,0.12);
+  --header-stat-border: rgba(255,255,255,0.2);
+  --header-stat-lbl: rgba(255,255,255,0.7);
+  --hdr-trend-up: #ff9b8a;
+  --hdr-trend-down: #7effc8;
+  --hdr-trend-flat: rgba(255,255,255,0.5);
+  --card-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  --toggle-bg: rgba(255,255,255,0.15);
+  --toggle-border: rgba(255,255,255,0.25);
+  --toggle-hover: rgba(255,255,255,0.25);
+  --toggle-text: rgba(255,255,255,0.9);
 }
+html.light .header-stat .val { color: #fff !important; }
+html.light #hdr-alarms { color: var(--alarm) !important; }
+html.light #hdr-warnings { color: var(--warning) !important; }
 
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100vh;width:100vw;overflow:hidden;background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;overflow-x:hidden;transition:background 0.25s,color 0.25s}
+::selection{background:var(--accent);color:#fff}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border-hover);border-radius:3px}
 
-/* ── LAYOUT ── */
-.dashboard{height:100vh;width:100vw;display:grid;grid-template-rows:auto 1fr;padding:14px 18px 12px;gap:0}
+.header{background:var(--header-bg);border-bottom:1px solid var(--border);padding:28px 40px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;top:-50%;right:-10%;width:500px;height:500px;background:radial-gradient(circle,var(--header-glow) 0%,transparent 70%);pointer-events:none}
+.header-left{display:flex;align-items:center;gap:20px;z-index:1}
+.header-title h1{font-size:26px;font-weight:900;color:var(--header-text);letter-spacing:0.5px;line-height:1.1}
+.header-title p{font-size:13px;color:var(--header-sub);margin-top:3px;font-weight:500}
+.header-right{display:flex;align-items:center;gap:12px;z-index:1}
+.header-stat{background:var(--header-stat-bg);border:1px solid var(--header-stat-border);border-radius:10px;padding:10px 18px;text-align:center;min-width:90px}
+.header-stat .val{font-size:22px;font-weight:900;line-height:1}
+.header-stat .lbl{font-size:10px;color:var(--header-stat-lbl);text-transform:uppercase;letter-spacing:0.8px;margin-top:3px}
+.hdr-trend{font-size:9px;font-weight:600;font-family:'JetBrains Mono',monospace;margin-top:3px}
+.hdr-trend.up{color:var(--hdr-trend-up)}.hdr-trend.down{color:var(--hdr-trend-down)}.hdr-trend.flat{color:var(--hdr-trend-flat)}
+.last-update{font-size:11px;color:var(--header-sub);text-align:right;margin-top:2px;font-family:'JetBrains Mono',monospace}
 
-/* ── HEADER ── */
-.topbar{
-  background:var(--header-bg);
-  border-radius:12px;
-  padding:14px 22px;
-  display:flex;align-items:center;justify-content:space-between;
-  position:relative;overflow:hidden;
-  margin-bottom:12px;
-  box-shadow:0 2px 12px rgba(16,66,119,0.18);
+/* ═══ THEME TOGGLE BUTTON ═══ */
+.theme-toggle{
+  display:flex;align-items:center;justify-content:center;
+  background:transparent;
+  border:1px solid transparent;
+  border-radius:8px;
+  padding:7px;
+  cursor:pointer;
+  color:var(--toggle-text);
+  transition:background 0.2s,border-color 0.2s,color 0.2s;
+  user-select:none;
+  opacity:0.5;
 }
-.topbar::before{
-  content:'';position:absolute;top:-60%;right:-5%;
-  width:420px;height:420px;
-  background:radial-gradient(circle,var(--header-glow) 0%,transparent 70%);
-  pointer-events:none;
-}
-.topbar-left h1{font-size:clamp(15px,1.8vw,22px);font-weight:900;color:#fff;letter-spacing:.4px;line-height:1;z-index:1;position:relative}
-.topbar-left p{font-size:clamp(9px,.85vw,11px);color:rgba(255,255,255,0.65);margin-top:3px;font-weight:500;z-index:1;position:relative}
+.theme-toggle:hover{background:var(--toggle-bg);border-color:var(--toggle-border);opacity:1}
+.toggle-icon-sun,.toggle-icon-moon{position:absolute;top:0;left:0;transition:opacity 0.25s,transform 0.35s}
+.toggle-icon-wrap{position:relative;width:15px;height:15px}
 
-.topbar-right{display:flex;align-items:center;gap:clamp(6px,1vw,12px);z-index:1}
+.controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:20px 40px;border-bottom:1px solid var(--border)}
+.filter-group{display:flex;gap:6px;align-items:center}
+.filter-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;margin-right:8px;font-weight:600}
+.filter-btn{background:var(--btn-bg);border:1px solid var(--border);color:var(--text-dim);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all 0.2s}
+.filter-btn:hover{border-color:var(--border-hover);color:var(--text)}
+.filter-btn.active{background:var(--btn-active-bg);border-color:var(--btn-active-border);color:#fff;box-shadow:0 2px 12px var(--btn-active-shadow)}
+.severity-btn.alarm.active{background:var(--alarm);border-color:var(--alarm);box-shadow:0 2px 12px rgba(240,69,58,0.3)}
+.severity-btn.warning.active{background:var(--warning);border-color:var(--warning);color:#1a1a1a;box-shadow:0 2px 12px rgba(245,166,35,0.3)}
 
-.stat-box{
-  background:var(--stat-bg);
-  border:1px solid var(--stat-border);
-  border-radius:10px;
-  padding:8px 16px;
-  text-align:center;
-  width:160px;
-  flex-shrink:0;
-}
-.stat-box .v{
-  font-size:clamp(18px,2vw,26px);font-weight:900;line-height:1;
-  height:26px;display:flex;align-items:center;justify-content:center;
-  transition:opacity .3s ease;
-  white-space:nowrap;overflow:hidden;
-  width:100%;
-  color:#fff;
-}
-.stat-box .l{font-size:clamp(7px,.65vw,9px);color:var(--stat-lbl);text-transform:uppercase;letter-spacing:.8px;margin-top:3px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:20px 40px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px;position:relative;overflow:hidden;transition:border-color 0.2s,background 0.25s;box-shadow:var(--card-shadow)}
+.kpi:hover{border-color:var(--border-hover)}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.kpi.total::after{background:var(--accent-light)}.kpi.alarm::after{background:var(--alarm)}.kpi.warning::after{background:var(--warning)}.kpi.parks::after{background:var(--green)}
+.kpi-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;font-weight:600}
+.kpi-value{font-size:36px;font-weight:900;line-height:1;margin-top:8px}
+.kpi.total .kpi-value{color:var(--accent-text)}.kpi.alarm .kpi-value{color:var(--alarm)}.kpi.warning .kpi-value{color:var(--warning)}.kpi.parks .kpi-value{color:var(--green)}
+.kpi-trend{font-size:11px;margin-top:6px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.trend-up{color:var(--alarm)}.trend-down{color:var(--green)}.trend-flat{color:var(--text-dim)}
 
-.maj{font-size:clamp(8px,.75vw,10px);color:rgba(255,255,255,0.6);font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 40px 14px}
+.chart-full{grid-column:1/-1}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px;transition:border-color 0.2s,background 0.25s;box-shadow:var(--card-shadow)}
+.chart-card:hover{border-color:var(--border-hover)}
+.chart-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.chart-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+.chart-sub{font-size:11px;color:var(--text-dim);margin-top:2px}
+canvas{max-height:450px}
 
-.c-up{color:var(--alarm)!important}
-.c-down{color:var(--green)!important}
-.c-flat{color:rgba(255,255,255,0.5)!important}
+.table-section{padding:0 40px 40px}
+.table-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--card-shadow);transition:background 0.25s}
+.table-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.table-header h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+.table-count{font-size:12px;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
+table{width:100%;border-collapse:collapse}
+th{background:var(--th-bg);padding:10px 18px;text-align:left;font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px}
+td{padding:11px 18px;font-size:13px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}tr:hover td{background:var(--accent-glow)}
+.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.tag-alarm{background:var(--alarm-bg);color:var(--alarm)}.tag-warning{background:var(--warning-bg);color:var(--warning)}
+.code-tag{font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(16,66,119,0.12);color:var(--accent-text);padding:3px 8px;border-radius:6px;font-weight:600}
+.bar-cell{display:flex;align-items:center;gap:10px}
+.bar-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width 0.5s ease}.bar-fill.alarm{background:var(--alarm)}.bar-fill.warning{background:var(--warning)}
+.bar-count{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;min-width:30px;text-align:right}
+.footer{text-align:center;padding:20px;font-size:11px;color:var(--text-dim);border-top:1px solid var(--border)}
+.no-data{text-align:center;padding:80px 40px;color:var(--text-dim)}.no-data h2{font-size:20px;margin-bottom:8px;color:var(--text)}
 
-/* ── GRID ── */
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  grid-template-rows:1fr 1fr;
-  gap:10px;
-  min-height:0;
-}
-.panel{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:12px 14px 10px;
-  display:flex;flex-direction:column;
-  min-height:0;overflow:hidden;
-  box-shadow:var(--card-shadow);
-  position:relative;
-}
-/* barre couleur top */
-.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0;background:linear-gradient(90deg,var(--accent) 0%,var(--accent-light) 100%)}
-
-.panel-title{
-  font-size:clamp(9px,.85vw,11px);font-weight:700;
-  text-transform:uppercase;letter-spacing:.6px;
-  color:var(--text-dim);margin-bottom:8px;flex-shrink:0;
-}
-.panel canvas{flex:1;min-height:0}
-.panel-timeline{grid-column:1/-1}
-
-.no-data{display:flex;align-items:center;justify-content:center;height:100vh;color:var(--text-dim);font-size:18px}
+@media(max-width:1024px){.kpis{grid-template-columns:repeat(2,1fr)}.charts{grid-template-columns:1fr}.header,.controls,.kpis,.charts,.table-section{padding-left:20px;padding-right:20px}}
+@media(max-width:600px){.kpis{grid-template-columns:1fr}.header{flex-direction:column;gap:16px;text-align:center}.header-right{flex-wrap:wrap;justify-content:center}}
 </style>
 </head>
 <body>
-<div class="dashboard">
-  <div class="topbar">
-    <div class="topbar-left">
-      <h1 id="sup-title"></h1>
-      <p>Alarm &amp; Warning — 7 jours glissants</p>
-    </div>
-    <div class="topbar-right">
-      <div class="stat-box"><div class="v" id="s-total" style="color:#7ec8f5">—</div><div class="l">Événements</div></div>
-      <div class="stat-box"><div class="v" id="s-alarm" style="color:var(--alarm)">—</div><div class="l">Alarmes</div></div>
-      <div class="stat-box"><div class="v" id="s-warn"  style="color:var(--warning)">—</div><div class="l">Warnings</div></div>
-      <div class="maj" id="s-maj">—</div>
-    </div>
-  </div>
 
-  <div class="grid">
-    <div class="panel"><div class="panel-title">Répartition par parc</div><canvas id="parksChart"></canvas></div>
-    <div class="panel"><div class="panel-title">Top récurrences</div><canvas id="topChart"></canvas></div>
-    <div class="panel panel-timeline"><div class="panel-title">Évolution journalière</div><canvas id="timeChart"></canvas></div>
+<div class="header">
+  <div class="header-left"><div class="header-title"><h1 id="sup-title"></h1><p>Alarm & Warning Dashboard</p></div></div>
+  <div class="header-right">
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Basculer le thème">
+      <div class="toggle-icon-wrap">
+        <svg class="toggle-icon-sun" id="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg class="toggle-icon-moon" id="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0;transform:rotate(-90deg) scale(0.8)">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </div>
+    </button>
+    <div class="header-stat"><div class="val" id="hdr-total" style="color:var(--accent-text)">—</div><div class="lbl">Événements</div><div class="hdr-trend" id="hdr-trend-total"></div></div>
+    <div class="header-stat"><div class="val" id="hdr-alarms" style="color:var(--alarm)">—</div><div class="lbl">Alarmes</div><div class="hdr-trend" id="hdr-trend-alarms"></div></div>
+    <div class="header-stat"><div class="val" id="hdr-warnings" style="color:var(--warning)">—</div><div class="lbl">Warnings</div><div class="hdr-trend" id="hdr-trend-warnings"></div></div>
+    <div><div class="last-update" id="last-update">—</div></div>
   </div>
 </div>
-<div class="no-data" id="no-data" style="display:none;">Aucune donnée — lancez la macro Excel.</div>
+
+<div class="controls">
+  <div class="filter-group">
+    <span class="filter-label">Période</span>
+    <button class="filter-btn" onclick="setPeriod('1d',this)">24h</button>
+    <button class="filter-btn active" onclick="setPeriod('7d',this)">7 jours</button>
+    <button class="filter-btn" onclick="setPeriod('1m',this)">1 mois</button>
+    <button class="filter-btn" onclick="setPeriod('3m',this)">3 mois</button>
+    <button class="filter-btn" onclick="setPeriod('6m',this)">6 mois</button>
+    <button class="filter-btn" onclick="setPeriod('1y',this)">1 an</button>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">Sévérité</span>
+    <button class="filter-btn severity-btn active" onclick="setSeverity('all',this)">Tous</button>
+    <button class="filter-btn severity-btn alarm" onclick="setSeverity('Alarm',this)">Alarmes</button>
+    <button class="filter-btn severity-btn warning" onclick="setSeverity('Warning',this)">Warnings</button>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi total"><div class="kpi-label">Total événements</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-trend" id="trend-total"></div></div>
+  <div class="kpi alarm"><div class="kpi-label">Alarmes</div><div class="kpi-value" id="kpi-alarms">—</div><div class="kpi-trend" id="trend-alarms"></div></div>
+  <div class="kpi warning"><div class="kpi-label">Warnings</div><div class="kpi-value" id="kpi-warnings">—</div><div class="kpi-trend" id="trend-warnings"></div></div>
+  <div class="kpi parks"><div class="kpi-label">Parcs concernés</div><div class="kpi-value" id="kpi-parks">—</div><div class="kpi-trend" id="trend-parks"></div></div>
+</div>
+
+<div class="charts">
+  <div class="chart-card chart-full"><div class="chart-header"><div><div class="chart-title">Évolution journalière</div><div class="chart-sub">Nombre d'événements par jour</div></div></div><canvas id="timelineChart"></canvas></div>
+  <div class="chart-card"><div class="chart-header"><div><div class="chart-title">Top récurrences</div><div class="chart-sub">Codes les plus fréquents</div></div></div><canvas id="topEventsChart"></canvas></div>
+  <div class="chart-card"><div class="chart-header"><div><div class="chart-title">Répartition par parc</div><div class="chart-sub">Top 10 wind parks</div></div></div><canvas id="parksChart"></canvas></div>
+</div>
+
+<div class="table-section"><div class="table-card"><div class="table-header"><h3>Détail des événements</h3><span class="table-count" id="table-count">—</span></div><div style="overflow-x:auto"><table><thead><tr><th>Sévérité</th><th>Code</th><th>Événement</th><th>Parc</th><th>Occurrences</th><th>Dernière vue</th><th>Turbines</th></tr></thead><tbody id="table-body"></tbody></table></div></div></div>
+
+<div class="footer"><span id="sup-footer"></span> — Données SCEMEA Daily Report FR — by HULOU</div>
+<div class="no-data" id="no-data" style="display:none"><h2>Aucune donnée disponible</h2><p>Lancez la macro Excel pour alimenter le dashboard.</p></div>
 
 <script>
 // ╔══════════════════════════════════════════════════════╗
 // ║  MODIFIER ICI                                        ║
 // ╚══════════════════════════════════════════════════════╝
-const SSU_FILE  = 'ssu_vienne';
+const SSU_FILE = 'ssu_vienne';
 const SSU_LABEL = 'SSU Vienne';
-const TOGGLE_SEC = 3;
 // ───────────────────────────────────────────────────────
 
-const DAYS = 7;
-const GC = 'rgba(0,0,0,0.06)';
-const TC = '#5a6578';
-const LC = '#1a2233';
-
-let parksChart, topChart, timeChart;
-const STATS = [
-  {id:'s-total', val:'—', trend:'', color:'#7ec8f5', tc:''},
-  {id:'s-alarm',  val:'—', trend:'', color:'#f0453a',  tc:''},
-  {id:'s-warn',   val:'—', trend:'', color:'#f5a623',  tc:''}
-];
-let showTrend = false;
-
+// === SETUP ===
 document.getElementById('sup-title').textContent = SSU_LABEL;
-document.title = SSU_LABEL + ' — Afficheur';
+document.getElementById('sup-footer').textContent = SSU_LABEL;
+document.title = SSU_LABEL + ' — Dashboard';
 
-async function init() {
-  let data;
-  try {
-    const r = await fetch('history_' + SSU_FILE + '.json?t=' + Date.now());
-    if (!r.ok) throw 0;
-    data = await r.json();
-  } catch(e) {
-    document.querySelector('.dashboard').style.display = 'none';
-    document.getElementById('no-data').style.display = 'flex';
-    return;
+// === DATA (déclaré tôt pour éviter ReferenceError dans applyTheme) ===
+let HISTORY=[], currentPeriod='7d', currentSeverity='all';
+let timelineChart, topEventsChart, parksChart;
+const PERIOD_DAYS = {'1d':1,'7d':7,'1m':30,'3m':90,'6m':180,'1y':365};
+
+// === THEME ===
+let currentTheme = localStorage.getItem('dashboard-theme') || 'light';
+applyTheme(currentTheme, false);
+
+function applyTheme(theme, withTransition) {
+  if (!withTransition) {
+    document.documentElement.style.transition = 'none';
+    requestAnimationFrame(() => { document.documentElement.style.transition = ''; });
   }
-
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - DAYS);
-  const cutStr  = cutoff.toISOString().slice(0,10);
-  const prevCutoff = new Date(); prevCutoff.setDate(prevCutoff.getDate() - DAYS * 2);
-  const prevStr = prevCutoff.toISOString().slice(0,10);
-
-  let events = [], prevEvents = [];
-  data.forEach(day => {
-    if (day.date >= cutStr)
-      day.events.forEach(ev => events.push({...ev, date: day.date}));
-    else if (day.date >= prevStr)
-      day.events.forEach(ev => prevEvents.push(ev));
-  });
-
-  const total   = events.reduce((s,e)=>s+e.count,0);
-  const alarms  = events.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0);
-  const warnings= events.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0);
-  const pT = prevEvents.reduce((s,e)=>s+e.count,0);
-  const pA = prevEvents.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0);
-  const pW = prevEvents.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0);
-
-  fillStat(STATS[0], total,    pT);
-  fillStat(STATS[1], alarms,   pA);
-  fillStat(STATS[2], warnings, pW);
-  showValues();
-
-  document.getElementById('s-maj').textContent = 'MAJ : ' + (data[data.length-1]?.date || '—');
-  setInterval(toggle, TOGGLE_SEC * 1000);
-
-  Chart.defaults.font.family = "'DM Sans',sans-serif";
-  Chart.defaults.color = TC;
-
-  drawParks(events);
-  drawTop(events);
-  drawTimeline(events);
+  if (theme === 'light') {
+    document.documentElement.classList.add('light');
+  } else {
+    document.documentElement.classList.remove('light');
+  }
+  // Update button label & icons
+  const label = document.getElementById('theme-label');
+  const sun = document.getElementById('icon-sun');
+  const moon = document.getElementById('icon-moon');
+  if (theme === 'dark') {
+    if (label) label.textContent = 'Mode clair';
+    if (sun)  { sun.style.opacity='1'; sun.style.transform='rotate(0deg) scale(1)'; }
+    if (moon) { moon.style.opacity='0'; moon.style.transform='rotate(-90deg) scale(0.8)'; }
+  } else {
+    if (label) label.textContent = 'Mode sombre';
+    if (sun)  { sun.style.opacity='0'; sun.style.transform='rotate(90deg) scale(0.8)'; }
+    if (moon) { moon.style.opacity='1'; moon.style.transform='rotate(0deg) scale(1)'; }
+  }
+  currentTheme = theme;
+  // Refresh chart colors and redraw only if data is loaded
+  if (typeof HISTORY !== 'undefined' && HISTORY.length) render();
 }
 
-function fillStat(s, cur, prev) {
-  s.val = String(cur);
-  if (prev > 0) {
-    const d = cur - prev, p = Math.round((d / prev) * 100);
-    if (d > 0)      { s.trend = '▲ +'+p+'%'; s.tc = 'c-up'; }
-    else if (d < 0) { s.trend = '▼ '+p+'%';  s.tc = 'c-down'; }
-    else            { s.trend = '→ 0%';       s.tc = 'c-flat'; }
+function toggleTheme() {
+  const next = currentTheme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('dashboard-theme', next);
+  applyTheme(next, true);
+}
+
+function getChartColors() {
+  return {
+    GC: currentTheme==='light' ? 'rgba(0,0,0,0.06)' : 'rgba(31,34,48,0.5)',
+    TC: currentTheme==='light' ? '#5a6578' : '#8189a3',
+    LC: currentTheme==='light' ? '#1a2233' : '#e4e8f1',
+  };
+}
+
+async function loadData(){
+  try{
+    const r=await fetch('history_'+SSU_FILE+'.json?t='+Date.now());
+    if(!r.ok) throw 0;
+    HISTORY=await r.json();
+    render();
+  } catch(e){
+    document.getElementById('no-data').style.display='block';
+    document.querySelector('.kpis').style.display='none';
+    document.querySelector('.charts').style.display='none';
+    document.querySelector('.table-section').style.display='none';
   }
 }
-function showValues() { STATS.forEach(s => anim(s.id, s.val,   s.color, '')); }
-function showTrends() { STATS.forEach(s => { if (s.trend) anim(s.id, s.trend, null, s.tc); }); }
-function anim(id, txt, col, cls) {
-  const el = document.getElementById(id);
-  el.style.opacity = '0';
-  setTimeout(() => {
-    el.textContent = txt;
-    if (col) { el.style.color = col; el.className = 'v'; }
-    else      { el.style.color = '';  el.className = 'v ' + cls; }
-    el.style.opacity = '1';
-  }, 300);
-}
-function toggle() { showTrend = !showTrend; showTrend ? showTrends() : showValues(); }
 
-function drawParks(events) {
-  const bp = {};
-  events.forEach(e => {
-    if (!bp[e.park]) bp[e.park] = {a:0, w:0};
-    if (e.severity === 'Alarm') bp[e.park].a += e.count;
-    else bp[e.park].w += e.count;
-  });
-  const sorted = Object.entries(bp).sort((a,b) => (b[1].a+b[1].w)-(a[1].a+a[1].w)).slice(0,10);
-  parksChart = new Chart(document.getElementById('parksChart'), {
-    type: 'bar',
-    data: {
-      labels: sorted.map(s => s[0]),
-      datasets: [
-        {label:'Alarmes', data:sorted.map(s=>s[1].a), backgroundColor:'rgba(240,69,58,0.75)', borderRadius:3, borderSkipped:false},
-        {label:'Warnings',data:sorted.map(s=>s[1].w), backgroundColor:'rgba(245,166,35,0.65)',borderRadius:3, borderSkipped:false}
-      ]
-    },
-    options: {
-      indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{stacked:true, grid:{color:GC}, ticks:{color:TC, font:{family:'JetBrains Mono',size:9}}},
-        y:{stacked:true, grid:{display:false}, ticks:{color:LC, font:{size:10}, autoSkip:false, maxRotation:0}}
-      }
-    }
-  });
+function getFilteredData(){
+  const now=new Date(),days=PERIOD_DAYS[currentPeriod],co=new Date(now);
+  co.setDate(co.getDate()-days);const cs=co.toISOString().slice(0,10);
+  let ev=[];
+  HISTORY.filter(d=>d.date>=cs).forEach(d=>{d.events.forEach(e=>{
+    if(currentSeverity!=='all'&&e.severity!==currentSeverity)return;
+    ev.push({...e,date:d.date});
+  })});
+  return ev;
 }
 
-function drawTop(events) {
-  const bc = {};
-  events.forEach(e => {
-    const k = e.code + ' — ' + e.event;
-    if (!bc[k]) bc[k] = {c:0, s:e.severity};
-    bc[k].c += e.count;
+function render(){
+  if(!HISTORY.length) return;
+  const ev=getFilteredData(),days=PERIOD_DAYS[currentPeriod];
+  const tot=ev.reduce((s,e)=>s+e.count,0),
+        alm=ev.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0),
+        wrn=ev.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0),
+        pks=new Set(ev.map(e=>e.park));
+  document.getElementById('kpi-total').textContent=tot;
+  document.getElementById('kpi-alarms').textContent=alm;
+  document.getElementById('kpi-warnings').textContent=wrn;
+  document.getElementById('kpi-parks').textContent=pks.size;
+  document.getElementById('hdr-total').textContent=tot;
+  document.getElementById('hdr-alarms').textContent=alm;
+  document.getElementById('hdr-warnings').textContent=wrn;
+  const now=new Date(),ps=new Date(now),pe=new Date(now);
+  ps.setDate(ps.getDate()-days*2);pe.setDate(pe.getDate()-days);
+  let pev=[];
+  HISTORY.filter(d=>d.date>=ps.toISOString().slice(0,10)&&d.date<pe.toISOString().slice(0,10)).forEach(d=>{
+    d.events.forEach(e=>{if(currentSeverity!=='all'&&e.severity!==currentSeverity)return;pev.push(e)});
   });
-  const sorted = Object.entries(bc).sort((a,b) => b[1].c - a[1].c).slice(0,12);
-  topChart = new Chart(document.getElementById('topChart'), {
-    type: 'bar',
-    data: {
-      labels: sorted.map(s => s[0].length > 35 ? s[0].slice(0,35)+'…' : s[0]),
-      datasets: [{
-        data: sorted.map(s => s[1].c),
-        backgroundColor: sorted.map(s => s[1].s === 'Alarm' ? 'rgba(240,69,58,0.75)' : 'rgba(245,166,35,0.65)'),
-        borderRadius: 3, borderSkipped: false
-      }]
-    },
-    options: {
-      indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{grid:{color:GC}, ticks:{color:TC, font:{family:'JetBrains Mono',size:9}}},
-        y:{grid:{display:false}, ticks:{color:LC, font:{size:10}, autoSkip:false, maxRotation:0}}
-      }
-    }
-  });
+  const pt=pev.reduce((s,e)=>s+e.count,0),
+        pa=pev.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0),
+        pw=pev.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0);
+  setTrend('trend-total',tot,pt);setTrend('trend-alarms',alm,pa);setTrend('trend-warnings',wrn,pw);
+  setHdr('hdr-trend-total',tot,pt);setHdr('hdr-trend-alarms',alm,pa);setHdr('hdr-trend-warnings',wrn,pw);
+  document.getElementById('last-update').textContent='MAJ : '+(HISTORY[HISTORY.length-1]?.date||'—');
+  renderTimeline(ev);renderTopEvents(ev);renderParks(ev);renderTable(ev);
 }
 
-function drawTimeline(events) {
-  const bd = {};
-  events.forEach(e => {
-    if (!bd[e.date]) bd[e.date] = {a:0, w:0};
-    if (e.severity === 'Alarm') bd[e.date].a += e.count;
-    else bd[e.date].w += e.count;
-  });
-  const dates  = Object.keys(bd).sort();
-  const labels = dates.map(d => { const p = d.split('-'); return p[2]+'/'+p[1]; });
-  timeChart = new Chart(document.getElementById('timeChart'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {label:'Alarmes', data:dates.map(d=>bd[d].a), backgroundColor:'rgba(240,69,58,0.75)', borderRadius:3, borderSkipped:false},
-        {label:'Warnings',data:dates.map(d=>bd[d].w), backgroundColor:'rgba(245,166,35,0.65)',borderRadius:3, borderSkipped:false}
-      ]
-    },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:TC, font:{size:10}, boxWidth:12, padding:8}}},
-      scales:{
-        x:{stacked:true, grid:{color:GC}, ticks:{color:TC, font:{family:'JetBrains Mono',size:9}, maxRotation:0}},
-        y:{stacked:true, grid:{color:GC}, ticks:{color:TC, font:{family:'JetBrains Mono',size:9}}}
-      }
-    }
-  });
+function setTrend(id,c,p){
+  const el=document.getElementById(id);if(!p){el.textContent='';return}
+  const d=c-p,pc=p>0?Math.round((d/p)*100):0;
+  if(d>0){el.className='kpi-trend trend-up';el.textContent='▲ +'+pc+'% vs période préc.'}
+  else if(d<0){el.className='kpi-trend trend-down';el.textContent='▼ '+pc+'% vs période préc.'}
+  else{el.className='kpi-trend trend-flat';el.textContent='→ stable'}
+}
+function setHdr(id,c,p){
+  const el=document.getElementById(id);if(!p){el.textContent='';return}
+  const d=c-p,pc=p>0?Math.round((d/p)*100):0;
+  if(d>0){el.className='hdr-trend up';el.textContent='▲ +'+pc+'%'}
+  else if(d<0){el.className='hdr-trend down';el.textContent='▼ '+pc+'%'}
+  else{el.className='hdr-trend flat';el.textContent='→ 0%'}
 }
 
-init();
-setInterval(() => { location.reload(); }, 5 * 60 * 1000);
+function renderTimeline(ev){
+  const {GC,TC}=getChartColors();
+  const bd={};ev.forEach(e=>{if(!bd[e.date])bd[e.date]={a:0,w:0};if(e.severity==='Alarm')bd[e.date].a+=e.count;else bd[e.date].w+=e.count});
+  const dt=Object.keys(bd).sort(),lb=dt.map(d=>{const[y,m,dd]=d.split('-');return dd+'/'+m});
+  if(timelineChart)timelineChart.destroy();
+  timelineChart=new Chart(document.getElementById('timelineChart'),{type:'bar',data:{labels:lb,datasets:[
+    {label:'Alarmes',data:dt.map(d=>bd[d].a),backgroundColor:'rgba(240,69,58,0.7)',borderRadius:4,borderSkipped:false},
+    {label:'Warnings',data:dt.map(d=>bd[d].w),backgroundColor:'rgba(245,166,35,0.6)',borderRadius:4,borderSkipped:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:TC,font:{family:'DM Sans',size:11}}}},scales:{x:{stacked:true,grid:{color:GC},ticks:{color:TC,font:{family:'JetBrains Mono',size:10}}},y:{stacked:true,grid:{color:GC},ticks:{color:TC,font:{family:'JetBrains Mono',size:10}}}}}});
+}
+function renderTopEvents(ev){
+  const {GC,TC,LC}=getChartColors();
+  const bc={},dt={};ev.forEach(e=>{const k=e.code+' — '+e.event;if(!bc[k])bc[k]={count:0,severity:e.severity};bc[k].count+=e.count;if(!dt[k])dt[k]={};if(!dt[k][e.park])dt[k][e.park]={count:0,turbines:new Set()};dt[k][e.park].count+=e.count;if(e.turbines)e.turbines.split(', ').forEach(t=>dt[k][e.park].turbines.add(t))});
+  const s=Object.entries(bc).sort((a,b)=>b[1].count-a[1].count).slice(0,10),ks=s.map(x=>x[0]);
+  if(topEventsChart)topEventsChart.destroy();
+  topEventsChart=new Chart(document.getElementById('topEventsChart'),{type:'bar',data:{labels:s.map(x=>x[0].length>40?x[0].slice(0,40)+'…':x[0]),datasets:[{data:s.map(x=>x[1].count),backgroundColor:s.map(x=>x[1].severity==='Alarm'?'rgba(240,69,58,0.75)':'rgba(245,166,35,0.65)'),borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(14,16,24,0.95)',borderColor:'rgba(16,66,119,0.3)',borderWidth:1,titleFont:{family:'DM Sans',size:12,weight:'bold'},bodyFont:{family:'JetBrains Mono',size:11},padding:12,callbacks:{title:function(i){return ks[i[0].dataIndex]},label:function(i){return'Total : '+i.raw},afterBody:function(i){const d=dt[ks[i[0].dataIndex]];if(!d)return[];const l=[''];Object.entries(d).sort((a,b)=>b[1].count-a[1].count).forEach(([p,v])=>{l.push(p+' : '+v.count);const t=[...v.turbines].sort().join(', ');if(t)l.push('  → '+t)});return l}}}},scales:{x:{grid:{color:GC},ticks:{color:TC,font:{family:'JetBrains Mono',size:10}}},y:{grid:{display:false},ticks:{color:LC,font:{family:'DM Sans',size:11}}}}}});
+}
+function renderParks(ev){
+  const {GC,TC,LC}=getChartColors();
+  const bp={},dt={};ev.forEach(e=>{if(!bp[e.park])bp[e.park]={a:0,w:0};if(e.severity==='Alarm')bp[e.park].a+=e.count;else bp[e.park].w+=e.count;if(!dt[e.park])dt[e.park]={};const ek=e.code+' — '+e.event;if(!dt[e.park][ek])dt[e.park][ek]={count:0,turbines:new Set()};dt[e.park][ek].count+=e.count;if(e.turbines)e.turbines.split(', ').forEach(t=>dt[e.park][ek].turbines.add(t))});
+  const s=Object.entries(bp).sort((a,b)=>(b[1].a+b[1].w)-(a[1].a+a[1].w)).slice(0,10),nm=s.map(x=>x[0]);
+  if(parksChart)parksChart.destroy();
+  parksChart=new Chart(document.getElementById('parksChart'),{type:'bar',data:{labels:nm,datasets:[{label:'Alarmes',data:s.map(x=>x[1].a),backgroundColor:'rgba(240,69,58,0.7)',borderRadius:4,borderSkipped:false},{label:'Warnings',data:s.map(x=>x[1].w),backgroundColor:'rgba(245,166,35,0.6)',borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:TC,font:{family:'DM Sans',size:11}}},tooltip:{backgroundColor:'rgba(14,16,24,0.95)',borderColor:'rgba(16,66,119,0.3)',borderWidth:1,titleFont:{family:'DM Sans',size:12,weight:'bold'},bodyFont:{family:'JetBrains Mono',size:11},padding:12,callbacks:{title:function(i){return nm[i[0].dataIndex]},afterBody:function(i){const d=dt[nm[i[0].dataIndex]];if(!d)return[];const l=[''],en=Object.entries(d).sort((a,b)=>b[1].count-a[1].count);en.slice(0,8).forEach(([v,x])=>{l.push(v+' : '+x.count);const t=[...x.turbines].sort().join(', ');if(t)l.push('  → '+t)});if(en.length>8)l.push('... +'+(en.length-8)+' autres');return l}}}},scales:{x:{stacked:true,grid:{color:GC},ticks:{color:TC,font:{family:'JetBrains Mono',size:10}}},y:{stacked:true,grid:{display:false},ticks:{color:LC,font:{family:'DM Sans',size:10},autoSkip:false,maxRotation:0}}}}});
+}
+function renderTable(ev){
+  const ag={};ev.forEach(e=>{const k=e.code+'|'+e.event+'|'+e.park;if(!ag[k])ag[k]={...e,totalCount:0,lastDate:'',turbineSet:new Set()};ag[k].totalCount+=e.count;if(e.date>ag[k].lastDate){ag[k].lastDate=e.date;ag[k].lastSeen=e.lastSeen||e.date}if(e.turbines)e.turbines.split(', ').forEach(t=>ag[k].turbineSet.add(t))});
+  const rw=Object.values(ag).sort((a,b)=>b.totalCount-a.totalCount),mx=rw.length?rw[0].totalCount:1;
+  document.getElementById('table-count').textContent=rw.length+' événements';
+  document.getElementById('table-body').innerHTML=rw.map(r=>{const ia=r.severity==='Alarm',p=Math.round((r.totalCount/mx)*100),tu=[...r.turbineSet].sort().join(', ');return'<tr><td><span class="tag '+(ia?'tag-alarm':'tag-warning')+'">'+r.severity+'</span></td><td><span class="code-tag">'+r.code+'</span></td><td>'+r.event+'</td><td>'+r.park+'</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill '+(ia?'alarm':'warning')+'" style="width:'+p+'%"></div></div><span class="bar-count">'+r.totalCount+'</span></div></td><td style="font-family:JetBrains Mono,monospace;font-size:12px;color:var(--text-dim)">'+(r.lastSeen||r.lastDate)+'</td><td style="font-size:12px;color:var(--text-dim)">'+(tu||'—')+'</td></tr>'}).join('');
+}
+
+function setPeriod(p,el){currentPeriod=p;document.querySelectorAll('.controls .filter-group:first-child .filter-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');render()}
+function setSeverity(s,el){currentSeverity=s;document.querySelectorAll('.severity-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');render()}
+
+loadData();
 </script>
 </body>
 </html>
