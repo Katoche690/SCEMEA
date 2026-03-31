@@ -241,7 +241,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--accent-glow)}
 
 <div class="table-section"><div class="table-card"><div class="table-header"><h3>Détail des événements</h3><span class="table-count" id="table-count">—</span></div><div style="overflow-x:auto"><table><thead><tr><th>Sévérité</th><th>Code</th><th>Événement</th><th>Parc</th><th>Occurrences</th><th>Dernière vue</th><th>Turbines</th></tr></thead><tbody id="table-body"></tbody></table></div></div></div>
 
-<div class="footer"><span id="sup-footer"></span> — Données SCEMEA Daily Report FR</div>
+<div class="footer"><span id="sup-footer"></span> — Données SCEMEA Daily Report FR — by HULOU</div>
 <div class="no-data" id="no-data" style="display:none"><h2>Aucune donnée disponible</h2><p>Lancez la macro Excel pour alimenter le dashboard.</p></div>
 
 <script>
@@ -263,7 +263,7 @@ let timelineChart, topEventsChart, parksChart;
 const PERIOD_DAYS = {'1d':1,'7d':7,'1m':30,'3m':90,'6m':180,'1y':365};
 
 // === THEME ===
-let currentTheme = localStorage.getItem('dashboard-theme') || 'dark';
+let currentTheme = localStorage.getItem('dashboard-theme') || 'light';
 applyTheme(currentTheme, false);
 
 function applyTheme(theme, withTransition) {
