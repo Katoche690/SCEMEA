@@ -257,6 +257,11 @@ document.getElementById('sup-title').textContent = SSU_LABEL;
 document.getElementById('sup-footer').textContent = SSU_LABEL;
 document.title = SSU_LABEL + ' — Dashboard';
 
+// === DATA (déclaré tôt pour éviter ReferenceError dans applyTheme) ===
+let HISTORY=[], currentPeriod='7d', currentSeverity='all';
+let timelineChart, topEventsChart, parksChart;
+const PERIOD_DAYS = {'1d':1,'7d':7,'1m':30,'3m':90,'6m':180,'1y':365};
+
 // === THEME ===
 let currentTheme = localStorage.getItem('dashboard-theme') || 'dark';
 applyTheme(currentTheme, false);
@@ -302,11 +307,6 @@ function getChartColors() {
     LC: currentTheme==='light' ? '#1a2233' : '#e4e8f1',
   };
 }
-
-// === DATA ===
-let HISTORY=[], currentPeriod='7d', currentSeverity='all';
-let timelineChart, topEventsChart, parksChart;
-const PERIOD_DAYS = {'1d':1,'7d':7,'1m':30,'3m':90,'6m':180,'1y':365};
 
 async function loadData(){
   try{
