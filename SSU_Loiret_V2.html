@@ -128,7 +128,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans
   opacity:0.5;
 }
 .theme-toggle:hover{background:var(--toggle-bg);border-color:var(--toggle-border);opacity:1}
-.toggle-icon-sun,.toggle-icon-moon{position:absolute;transition:opacity 0.25s,transform 0.35s}
+.toggle-icon-sun,.toggle-icon-moon{position:absolute;top:0;left:0;transition:opacity 0.25s,transform 0.35s}
 .toggle-icon-wrap{position:relative;width:15px;height:15px}
 
 .controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:20px 40px;border-bottom:1px solid var(--border)}
@@ -285,8 +285,8 @@ function applyTheme(theme, withTransition) {
     if (moon) { moon.style.opacity='1'; moon.style.transform='rotate(0deg) scale(1)'; }
   }
   currentTheme = theme;
-  // Refresh chart colors and redraw
-  if (HISTORY.length) render();
+  // Refresh chart colors and redraw only if data is loaded
+  if (typeof HISTORY !== 'undefined' && HISTORY.length) render();
 }
 
 function toggleTheme() {
