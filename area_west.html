@@ -518,8 +518,9 @@ function renderTable(ev){
     if(e.date>ag[k].lastDate){ag[k].lastDate=e.date;ag[k].lastSeen=e.lastSeen||e.date}
     if(e.turbines)e.turbines.split(', ').forEach(t=>ag[k].turbineSet.add(t));
   });
-  const rw=Object.values(ag).sort((a,b)=>b.totalCount-a.totalCount),mx=rw.length?rw[0].totalCount:1;
-  document.getElementById('table-count').textContent=rw.length+' événements';
+  const rwAll=Object.values(ag).sort((a,b)=>b.totalCount-a.totalCount);
+  const rw=rwAll.slice(0,50),mx=rwAll.length?rwAll[0].totalCount:1;
+  document.getElementById('table-count').textContent='Top 50 / '+rwAll.length+' événements';
   document.getElementById('table-body').innerHTML=rw.map(r=>{
     const ia=r.severity==='Alarm',p=Math.round((r.totalCount/mx)*100),tu=[...r.turbineSet].sort().join(', ');
     return'<tr><td><span class="tag '+(ia?'tag-alarm':'tag-warning')+'">'+r.severity+'</span></td><td><span class="code-tag">'+r.code+'</span></td><td>'+r.event+'</td><td>'+r.park+'</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill '+(ia?'alarm':'warning')+'" style="width:'+p+'%"></div></div><span class="bar-count">'+r.totalCount+'</span></div></td><td style="font-family:JetBrains Mono,monospace;font-size:12px;color:var(--text-dim)">'+(r.lastSeen||r.lastDate)+'</td><td style="font-size:12px;color:var(--text-dim)">'+(tu||'—')+'</td></tr>';
