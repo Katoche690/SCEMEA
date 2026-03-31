@@ -143,8 +143,8 @@ html,body{height:100vh;width:100vw;overflow:hidden;background:var(--bg);color:va
 // ╔══════════════════════════════════════════════════════╗
 // ║  MODIFIER ICI                                        ║
 // ╚══════════════════════════════════════════════════════╝
-const SSU_FILE  = 'ssu_atlantique';
-const SSU_LABEL = 'SSU Atlantique';
+const SSU_FILE  = 'ssu_centre';
+const SSU_LABEL = 'SSU Centre';
 const TOGGLE_SEC = 3;
 // ───────────────────────────────────────────────────────
 
