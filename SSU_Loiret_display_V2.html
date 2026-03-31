@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Afficheur</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f3f4f6;
+  --card: #ffffff;
+  --border: #dde1e8;
+  --text: #1a2233;
+  --text-dim: #5a6578;
+  --accent: #104277;
+  --accent-light: #1a5ba0;
+  --accent-text: #104277;
+  --alarm: #f0453a;
+  --alarm-bg: rgba(240,69,58,0.10);
+  --warning: #f5a623;
+  --warning-bg: rgba(245,166,35,0.10);
+  --green: #1a9a6e;
+  --header-bg: linear-gradient(135deg,#104277 0%,#1a5ba0 50%,#104277 100%);
+  --header-glow: rgba(255,255,255,0.06);
+  --chart-grid: rgba(0,0,0,0.06);
+  --chart-text: #5a6578;
+  --chart-label: #1a2233;
+  --card-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  --stat-bg: rgba(255,255,255,0.14);
+  --stat-border: rgba(255,255,255,0.22);
+  --stat-lbl: rgba(255,255,255,0.75);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100vh;width:100vw;overflow:hidden;background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif}
+
+/* ── LAYOUT ── */
+.dashboard{height:100vh;width:100vw;display:grid;grid-template-rows:auto 1fr;padding:14px 18px 12px;gap:0}
+
+/* ── HEADER ── */
+.topbar{
+  background:var(--header-bg);
+  border-radius:12px;
+  padding:14px 22px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:relative;overflow:hidden;
+  margin-bottom:12px;
+  box-shadow:0 2px 12px rgba(16,66,119,0.18);
+}
+.topbar::before{
+  content:'';position:absolute;top:-60%;right:-5%;
+  width:420px;height:420px;
+  background:radial-gradient(circle,var(--header-glow) 0%,transparent 70%);
+  pointer-events:none;
+}
+.topbar-left h1{font-size:clamp(15px,1.8vw,22px);font-weight:900;color:#fff;letter-spacing:.4px;line-height:1;z-index:1;position:relative}
+.topbar-left p{font-size:clamp(9px,.85vw,11px);color:rgba(255,255,255,0.65);margin-top:3px;font-weight:500;z-index:1;position:relative}
+
+.topbar-right{display:flex;align-items:center;gap:clamp(6px,1vw,12px);z-index:1}
+
+.stat-box{
+  background:var(--stat-bg);
+  border:1px solid var(--stat-border);
+  border-radius:10px;
+  padding:8px 16px;
+  text-align:center;
+  min-width:96px;
+}
+.stat-box .v{
+  font-size:clamp(16px,1.8vw,24px);font-weight:900;line-height:1;
+  height:30px;display:flex;align-items:center;justify-content:center;
+  transition:opacity .3s ease;white-space:nowrap;
+  color:#fff;
+}
+.stat-box .l{font-size:clamp(7px,.65vw,9px);color:var(--stat-lbl);text-transform:uppercase;letter-spacing:.8px;margin-top:3px}
+
+.maj{font-size:clamp(8px,.75vw,10px);color:rgba(255,255,255,0.6);font-family:'JetBrains Mono',monospace;white-space:nowrap}
+
+.c-up{color:var(--alarm)!important}
+.c-down{color:var(--green)!important}
+.c-flat{color:rgba(255,255,255,0.5)!important}
+
+/* ── GRID ── */
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr;
+  gap:10px;
+  min-height:0;
+}
+.panel{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px 14px 10px;
+  display:flex;flex-direction:column;
+  min-height:0;overflow:hidden;
+  box-shadow:var(--card-shadow);
+  position:relative;
+}
+/* barre couleur top */
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0;background:linear-gradient(90deg,var(--accent) 0%,var(--accent-light) 100%)}
+
+.panel-title{
+  font-size:clamp(9px,.85vw,11px);font-weight:700;
+  text-transform:uppercase;letter-spacing:.6px;
+  color:var(--text-dim);margin-bottom:8px;flex-shrink:0;
+}
+.panel canvas{flex:1;min-height:0}
+.panel-timeline{grid-column:1/-1}
+
+.no-data{display:flex;align-items:center;justify-content:center;height:100vh;color:var(--text-dim);font-size:18px}
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1 id="sup-title"></h1>
+      <p>Alarm &amp; Warning — 7 jours glissants</p>
+    </div>
+    <div class="topbar-right">
+      <div class="stat-box"><div class="v" id="s-total" style="color:#7ec8f5">—</div><div class="l">Événements</div></div>
+      <div class="stat-box"><div class="v" id="s-alarm" style="color:var(--alarm)">—</div><div class="l">Alarmes</div></div>
+      <div class="stat-box"><div class="v" id="s-warn"  style="color:var(--warning)">—</div><div class="l">Warnings</div></div>
+      <div class="maj" id="s-maj">—</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel"><div class="panel-title">Répartition par parc</div><canvas id="parksChart"></canvas></div>
+    <div class="panel"><div class="panel-title">Top récurrences</div><canvas id="topChart"></canvas></div>
+    <div class="panel panel-timeline"><div class="panel-title">Évolution journalière</div><canvas id="timeChart"></canvas></div>
+  </div>
+</div>
+<div class="no-data" id="no-data" style="display:none;">Aucune donnée — lancez la macro Excel.</div>
+
+<script>
+// ╔══════════════════════════════════════════════════════╗
+// ║  MODIFIER ICI                                        ║
+// ╚══════════════════════════════════════════════════════╝
+const SSU_FILE  = 'ssu_loiret';
+const SSU_LABEL = 'SSU Loiret';
+const TOGGLE_SEC = 4;
+// ───────────────────────────────────────────────────────
+
+const DAYS = 7;
+const GC = 'rgba(0,0,0,0.06)';
+const TC = '#5a6578';
+const LC = '#1a2233';
+
+let parksChart, topChart, timeChart;
+const STATS = [
+  {id:'s-total', val:'—', trend:'', color:'#7ec8f5', tc:''},
+  {id:'s-alarm',  val:'—', trend:'', color:'#f0453a',  tc:''},
+  {id:'s-warn',   val:'—', trend:'', color:'#f5a623',  tc:''}
+];
+let showTrend = false;
+
+document.getElementById('sup-title').textContent = SSU_LABEL;
+document.title = SSU_LABEL + ' — Afficheur';
+
+async function init() {
+  let data;
+  try {
+    const r = await fetch('history_' + SSU_FILE + '.json?t=' + Date.now());
+    if (!r.ok) throw 0;
+    data = await r.json();
+  } catch(e) {
+    document.querySelector('.dashboard').style.display = 'none';
+    document.getElementById('no-data').style.display = 'flex';
+    return;
+  }
+
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - DAYS);
+  const cutStr  = cutoff.toISOString().slice(0,10);
+  const prevCutoff = new Date(); prevCutoff.setDate(prevCutoff.getDate() - DAYS * 2);
+  const prevStr = prevCutoff.toISOString().slice(0,10);
+
+  let events = [], prevEvents = [];
+  data.forEach(day => {
+    if (day.date >= cutStr)
+      day.events.forEach(ev => events.push({...ev, date: day.date}));
+    else if (day.date >= prevStr)
+      day.events.forEach(ev => prevEvents.push(ev));
+  });
+
+  const total   = events.reduce((s,e)=>s+e.count,0);
+  const alarms  = events.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0);
+  const warnings= events.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0);
+  const pT = prevEvents.reduce((s,e)=>s+e.count,0);
+  const pA = prevEvents.filter(e=>e.severity==='Alarm').reduce((s,e)=>s+e.count,0);
+  const pW = prevEvents.filter(e=>e.severity==='Warning').reduce((s,e)=>s+e.count,0);
+
+  fillStat(STATS[0], total,    pT);
+  fillStat(STATS[1], alarms,   pA);
+  fillStat(STATS[2], warnings, pW);
+  showValues();
+
+  document.getElementById('s-maj').textContent = 'MAJ : ' + (data[data.length-1]?.date || '—');
+  setInterval(toggle, TOGGLE_SEC * 1000);
+
+  Chart.defaults.font.family = "'DM Sans',sans-serif";
+  Chart.defaults.color = TC;
+
+  drawParks(events);
+  drawTop(events);
+  drawTimeline(events);
+}
+
+function fillStat(s, cur, prev) {
+  s.val = String(cur);
+  if (prev > 0) {
+    const d = cur - prev, p = Math.round((d / prev) * 100);
+    if (d > 0)      { s.trend = '▲ +'+p+'%'; s.tc = 'c-up'; }
+    else if (d < 0) { s.trend = '▼ '+p+'%';  s.tc = 'c-down'; }
+    else            { s.trend = '→ 0%';       s.tc = 'c-flat'; }
+  }
+}
+function showValues() { STATS.forEach(s => anim(s.id, s.val,   s.color, '')); }
+function showTrends() { STATS.forEach(s => { if (s.trend) anim(s.id, s.trend, null, s.tc); }); }
+function anim(id, txt, col, cls) {
+  const el = document.getElementById(id);
+  el.style.opacity = '0';
+  setTimeout(() => {
+    el.textContent = txt;
+    if (col) { el.style.color = col; el.className = 'v'; }
+    else      { el.style.color = '';  el.className = 'v ' + cls; }
+    el.style.opacity = '1';
+  }, 300);
+}
+function toggle() { showTrend = !showTrend; showTrend ? showTrends() : showValues(); }
+
+function drawParks(events) {
+  const bp = {};
+  events.forEach(e => {
+    if (!bp[e.park]) bp[e.park] = {a:0, w:0};
+    if (e.severity === 'Alarm') bp[e.park].a += e.count;
+    else bp[e.park].w += e.count;
+  });
+  const sorted = Object.entries(bp).sort((a,b) => (b[1].a+b[1].w)-(a[1].a+a[1].w)).slice(0,10);
+  parksChart = new Chart(document.getElementById('parksChart'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(s => s[0]),
+      datasets: [
+        {label:'Alarmes', data:sorted.map(s=>s[1].a), backgroundColor:'rgba(240,69,58,0.75)', borderRadius:3, borderSkipped:false},
+        {label:'Warnings',data:sorted.map(s=>s[1].w), backgroundColor:'rgba(245,166,35,0.65)',borderRadius:3, borderSkipped:false}
+      ]
+    },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{stacked:true, grid:{color:GC}, ticks:{color:TC, font:{family:'JetBrains Mono',size:9}}},
+        y:{stacked:true, grid:{display:false}, ticks:{color:LC, font:{size:10}, autoSkip:false, maxRotation:0}}
+      }
+    }
+  });
+}
+
+function drawTop(events) {
+  const bc = {};
+  events.forEach(e => {
+    const k = e.code + ' — ' + e.event;
+    if (!bc[k]) bc[k] = {c:0, s:e.severity};
+    bc[k].c += e.count;
+  });
+  const sorted = Object.entries(bc).sort((a,b) => b[1].c - a[1].c).slice(0,12);
+  topChart = new Chart(document.getElementById('topChart'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(s => s[0].length > 35 ? s[0].slice(0,35)+'…' : s[0]),
+      datasets: [{
+        data: sorted.map(s => s[1].c),
+        backgroundColor: sorted.map(s => s[1].s === 'Alarm' ? 'rgba(240,69,58,0.75)' : 'rgba(245,166,35,0.65)'),
+        borderRadius: 3, borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{grid:{color:GC}, ticks:{color:TC, font:{family:'JetBrains Mono',size:9}}},
+        y:{grid:{display:false}, ticks:{color:LC, font:{size:10}, autoSkip:false, maxRotation:0}}
+      }
+    }
+  });
+}
+
+function drawTimeline(events) {
+  const bd = {};
+  events.forEach(e => {
+    if (!bd[e.date]) bd[e.date] = {a:0, w:0};
+    if (e.severity === 'Alarm') bd[e.date].a += e.count;
+    else bd[e.date].w += e.count;
+  });
+  const dates  = Object.keys(bd).sort();
+  const labels = dates.map(d => { const p = d.split('-'); return p[2]+'/'+p[1]; });
+  timeChart = new Chart(document.getElementById('timeChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Alarmes', data:dates.map(d=>bd[d].a), backgroundColor:'rgba(240,69,58,0.75)', borderRadius:3, borderSkipped:false},
+        {label:'Warnings',data:dates.map(d=>bd[d].w), backgroundColor:'rgba(245,166,35,0.65)',borderRadius:3, borderSkipped:false}
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:TC, font:{size:10}, boxWidth:12, padding:8}}},
+      scales:{
+        x:{stacked:true, grid:{color:GC}, ticks:{color:TC, font:{family:'JetBrains Mono',size:9}, maxRotation:0}},
+        y:{stacked:true, grid:{color:GC}, ticks:{color:TC, font:{family:'JetBrains Mono',size:9}}}
+      }
+    }
+  });
+}
+
+init();
+setInterval(() => { location.reload(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
